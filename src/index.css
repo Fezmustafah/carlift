@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+.input {
+  @apply w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-base outline-none focus:border-emerald-500;
+}
+.label {
+  @apply block text-sm font-medium text-stone-600 mb-1;
+}
+.btn-primary {
+  @apply rounded-xl bg-emerald-600 px-4 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-ghost {
+  @apply rounded-xl border border-stone-300 bg-white px-4 py-2.5 font-medium text-stone-700 hover:bg-stone-100;
+}
+.card {
+  @apply bg-white rounded-2xl border border-stone-200 p-4;
+}
+.chip {
+  @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
+}
