@@ -6,6 +6,7 @@ const tabs = [
   { to: '/members', label: 'Members' },
   { to: '/expiring', label: 'Expiring' },
   { to: '/logs', label: 'Logs' },
+  { to: '/cards', label: 'QR Cards' },
 ]
 
 export default function Shell() {

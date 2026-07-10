@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Members from './pages/Members'
 import Expiring from './pages/Expiring'
 import Logs from './pages/Logs'
+import Cards from './pages/Cards'
 
 function SetupNotice() {
   return (
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/members" element={<Members />} />
         <Route path="/expiring" element={<Expiring />} />
         <Route path="/logs" element={<Logs />} />
+        <Route path="/cards" element={<Cards />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -18,3 +18,46 @@
 .chip {
   @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
 }
+
+.qr-card {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@keyframes stepIn {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.step-in {
+  animation: stepIn 0.22s ease-out;
+}
+
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  .print-cards {
+    display: block !important;
+  }
+  .qr-card {
+    page-break-after: always;
+    break-inside: avoid;
+    border: none !important;
+    margin: 0 auto;
+    width: 90mm;
+  }
+  .qr-card:last-child {
+    page-break-after: auto;
+  }
+}
