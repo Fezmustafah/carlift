@@ -170,6 +170,9 @@ export default function Join() {
               WhatsApp Office
             </a>
           )}
+          <a href="/rules" className="btn-ghost block">
+            📋 Read the rules / Basahin ang patakaran
+          </a>
           <p className="text-xs text-stone-400 pt-2">
             Payment only to office — paying the driver is not valid.
             <br />

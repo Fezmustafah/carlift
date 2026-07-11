@@ -60,4 +60,11 @@
   .qr-card:last-child {
     page-break-after: auto;
   }
+  .seat-sheet {
+    page-break-after: always;
+    break-inside: avoid;
+  }
+  .seat-sheet:last-child {
+    page-break-after: auto;
+  }
 }

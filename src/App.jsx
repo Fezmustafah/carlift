@@ -9,6 +9,7 @@ import Members from './pages/Members'
 import Expiring from './pages/Expiring'
 import Logs from './pages/Logs'
 import Cards from './pages/Cards'
+import Rules from './pages/Rules'
 
 function SetupNotice() {
   return (
@@ -51,6 +52,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/join" element={<Join />} />
+      <Route path="/rules" element={<Rules />} />
       <Route path="/login" element={<Login session={session} />} />
       <Route
         element={

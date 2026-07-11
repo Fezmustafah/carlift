@@ -43,14 +43,40 @@ function Card({ car }) {
   )
 }
 
+function MiniCard({ car }) {
+  const url = car ? `${joinUrl}?car=${car.id}` : joinUrl
+  return (
+    <div className="flex flex-col items-center justify-between border-2 border-dashed border-stone-300 rounded-lg p-3 text-center bg-white">
+      <div className="font-extrabold text-emerald-700 leading-tight">CAR LIFT</div>
+      <div className="text-xs font-semibold text-stone-700 leading-tight">{car ? car.name : 'Any car'}</div>
+      <QRCodeSVG value={url} size={116} level="M" marginSize={1} className="my-1.5" />
+      <div className="text-[11px] font-bold text-stone-900 leading-tight">
+        SCAN TO REGISTER
+        <br />
+        <span className="font-normal text-stone-500">I-scan para magparehistro</span>
+      </div>
+      <div className="text-[10px] font-semibold text-amber-700 leading-tight mt-1">
+        Pay OFFICE only · Sa opisina lamang
+        {office && <><br />{office}</>}
+      </div>
+    </div>
+  )
+}
+
+// One A4 sheet = 9 mini cards. Sheets per car = enough for every seat pouch.
+function seatSheets(car) {
+  return Math.max(1, Math.ceil((car.seats || 9) / 9))
+}
+
 export default function Cards() {
   const [cars, setCars] = useState([])
+  const [mode, setMode] = useState('seat')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     supabase
       .from('cars')
-      .select('id, name, driver_name')
+      .select('id, name, driver_name, seats')
       .order('name')
       .then(({ data }) => {
         setCars(data || [])
@@ -58,23 +84,63 @@ export default function Cards() {
       })
   }, [])
 
+  const totalSheets = cars.reduce((t, c) => t + seatSheets(c), 0)
+
   return (
     <div className="space-y-5">
       <div className="no-print flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold">QR Cards</h1>
+        <div className="flex rounded-xl border border-stone-300 overflow-hidden text-sm font-medium">
+          {[
+            ['seat', 'Seat cards (9/page)'],
+            ['big', 'Big cards'],
+          ].map(([v, label]) => (
+            <button
+              key={v}
+              onClick={() => setMode(v)}
+              className={`px-3 py-2 ${mode === v ? 'bg-emerald-600 text-white' : 'bg-white text-stone-600'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <button onClick={() => window.print()} className="btn-primary ml-auto">
-          🖨 Print cards
+          🖨 Print
         </button>
       </div>
 
-      <p className="no-print text-sm text-stone-500">
-        One card per car (plus one “Any car” card). Print → laminate → hang in each vehicle. Riders scan → land on the
-        registration form. Each car card deep-links so the rider’s car is pre-selected. Print at A5/A6 for the glovebox
-        or the seat-back.
-      </p>
+      {mode === 'seat' ? (
+        <p className="no-print text-sm text-stone-500">
+          One card per seat pouch. Prints {totalSheets} A4 page{totalSheets === 1 ? '' : 's'} — enough cards for every
+          seat of every car (9 per page, sheet count follows each car's seat count). Cut along the dashed lines. Plain
+          paper dies fast in pouches — use thick paper (card stock) or cover each card with clear packing tape.
+        </p>
+      ) : (
+        <p className="no-print text-sm text-stone-500">
+          One big card per car (plus one “Any car” card) — for the dashboard, door, or WhatsApp broadcast image. Each
+          car card deep-links so the rider’s car is pre-selected.
+        </p>
+      )}
 
       {loading ? (
         <p className="text-stone-400 text-center py-8">Loading…</p>
+      ) : mode === 'seat' ? (
+        <div className="space-y-6">
+          {cars.map((car) =>
+            Array.from({ length: seatSheets(car) }, (_, i) => (
+              <div key={car.id + i} className="seat-sheet">
+                <div className="no-print text-xs text-stone-400 mb-1">
+                  {car.name} — sheet {i + 1} of {seatSheets(car)}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 9 }, (_, j) => (
+                    <MiniCard key={j} car={car} />
+                  ))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       ) : (
         <div className="print-cards grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Card car={null} />
