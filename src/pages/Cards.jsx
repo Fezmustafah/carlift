@@ -29,14 +29,14 @@ function Card({ car }) {
       <div className="text-center px-5">
         <div className="text-xl font-extrabold text-stone-900">SCAN TO REGISTER</div>
         <div className="text-base text-stone-600" dir="auto">
-          Register karne ke liye scan karein
+          I-scan para magparehistro
         </div>
         <div className="mt-1 text-xs text-stone-400 break-all">{url}</div>
       </div>
 
       <div className="mt-4 bg-amber-50 border-t-2 border-amber-300 text-amber-900 text-center px-4 py-3">
         <div className="font-bold text-sm">✅ Pay OFFICE only — paying the driver is NOT valid</div>
-        <div className="text-sm" dir="auto">Paisa sirf OFFICE ko. Driver ko dena valid nahi.</div>
+        <div className="text-sm" dir="auto">Magbayad sa OPISINA lamang. Hindi valid ang bayad sa driver.</div>
         {office && <div className="mt-1 text-sm font-semibold text-stone-700">Office WhatsApp: {office}</div>}
       </div>
     </div>
