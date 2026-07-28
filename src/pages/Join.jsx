@@ -65,6 +65,7 @@ export default function Join() {
   const [done, setDone] = useState(false)
   const [already, setAlready] = useState(false)
   const office = import.meta.env.VITE_OFFICE_WHATSAPP
+  const community = import.meta.env.VITE_COMMUNITY_LINK
 
   useEffect(() => {
     if (!supabase) return
@@ -277,9 +278,15 @@ export default function Join() {
             </div>
           )}
 
+          {community && (
+            <a href={community} target="_blank" rel="noreferrer" className="btn-primary btn-lg block">
+              💬 Join the Car Lift group
+              <span className="block text-sm font-normal opacity-90">Sumali sa group — timings and notices</span>
+            </a>
+          )}
           {office && (
-            <a href={waLink(office, 'Hi, I just registered for car lift.')} className="btn-primary block">
-              💬 WhatsApp Office
+            <a href={waLink(office, 'Hi, I just registered for car lift.')} className="btn-ghost block">
+              Message the office / I-message ang opisina
             </a>
           )}
           <a href="/rules" className="btn-ghost block">

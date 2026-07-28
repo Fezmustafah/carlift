@@ -67,6 +67,7 @@ export default function Checkin() {
   const [err, setErr] = useState('')
   const [done, setDone] = useState(false)
   const office = import.meta.env.VITE_OFFICE_WHATSAPP
+  const community = import.meta.env.VITE_COMMUNITY_LINK
 
   useEffect(() => {
     if (!supabase) return
@@ -248,9 +249,15 @@ export default function Checkin() {
             <br />
             Mula 5–10 Agosto, sa opisina lamang ang bayad. Hindi bibilangin ang bayad sa driver.
           </div>
+          {community && (
+            <a href={community} target="_blank" rel="noreferrer" className="btn-primary btn-lg block">
+              💬 Join the Car Lift group
+              <span className="block text-sm font-normal opacity-90">Sumali sa group — timings and notices</span>
+            </a>
+          )}
           {office && (
-            <a href={waLink(office, 'Hi, I just sent my car lift payment details.')} className="btn-primary block">
-              💬 WhatsApp Office
+            <a href={waLink(office, 'Hi, I just sent my car lift payment details.')} className="btn-ghost block">
+              Message the office / I-message ang opisina
             </a>
           )}
           <a href="/rules" className="btn-ghost block">

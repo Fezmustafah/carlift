@@ -1,4 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
+import { waLink } from '../lib/wa'
+
+const office = import.meta.env.VITE_OFFICE_WHATSAPP
 
 // One link goes to the groups and onto the seat QR cards. This page is the fork:
 // riders who already ride with us declare their payment, new ones register.
@@ -54,6 +57,21 @@ export default function Start() {
           <br />
           Sa opisina lamang ang bayad. Hindi valid ang bayad sa driver.
         </p>
+
+        {office && (
+          <p className="text-xs text-center">
+            <a
+              href={waLink(
+                office,
+                'Car Lift — I want to report a problem.\n\nWhat happened:\nWho:\nWhen:\n\n(Car Lift — gusto ko pong mag-report ng problema.)'
+              )}
+              className="underline"
+              style={{ color: 'var(--bad)' }}
+            >
+              Somebody bothering you? Tell the office privately / May nanggugulo? Sabihin sa opisina
+            </a>
+          </p>
+        )}
       </div>
     </div>
   )
