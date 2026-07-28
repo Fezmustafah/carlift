@@ -71,6 +71,8 @@ export default function Verify() {
   const [members, setMembers] = useState([])
   const [cars, setCars] = useState([])
   const [showResolved, setShowResolved] = useState(false)
+  const [q, setQ] = useState('')
+  const [carFilter, setCarFilter] = useState('')
   const [payFor, setPayFor] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -118,13 +120,70 @@ export default function Verify() {
     })
   }, [decls, members, cars])
 
-  const visible = showResolved ? rows : rows.filter((r) => !r.d.resolved)
+  const visible = rows.filter((r) => {
+    if (!showResolved && r.d.resolved) return false
+    if (carFilter && r.d.car_id !== carFilter) return false
+    if (q) {
+      const t = `${r.d.name} ${r.d.phone}`.toLowerCase()
+      if (!t.includes(q.toLowerCase())) return false
+    }
+    return true
+  })
   const leak = rows
     .filter((r) => r.bucket === 'driver' && !r.d.resolved)
     .reduce((t, r) => t + Number(r.d.amount || 0), 0)
   const ghost = rows
     .filter((r) => r.bucket === 'ghost' && !r.d.resolved)
     .reduce((t, r) => t + Number(r.d.amount || 0), 0)
+
+  // Sitting with the paper register is easier from a sorted sheet than a phone
+  // screen, so the same rows come out as a spreadsheet.
+  function exportCsv() {
+    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const head = [
+      'name',
+      'phone',
+      'car',
+      'driver',
+      'shift',
+      'plan',
+      'paid',
+      'paid_to',
+      'paid_when',
+      'amount',
+      'payments_on_record',
+      'last_payment',
+      'bucket',
+      'checked',
+    ]
+    const body = visible.map(({ d, member, car }) => {
+      const subs = member?.subscriptions || []
+      const last = subs.slice().sort((x, y) => (x.end_date < y.end_date ? 1 : -1))[0]
+      return [
+        d.name,
+        d.phone,
+        car?.name,
+        car?.driver_name,
+        d.shift,
+        d.plan_pref,
+        d.paid,
+        d.paid_to,
+        d.paid_when,
+        d.amount,
+        subs.length,
+        last ? `AED ${last.amount} ${last.start_date} to ${last.end_date}` : '',
+        classify(d, member),
+        d.resolved ? 'yes' : 'no',
+      ].map(cell)
+    })
+    const csv = [head.map(cell).join(','), ...body.map((r) => r.join(','))].join('\r\n')
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `carlift-checkins-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   if (loading) {
     return (
@@ -141,10 +200,36 @@ export default function Verify() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="h1">Verify</h1>
-        <button onClick={() => setShowResolved((v) => !v)} className={`pill ${showResolved ? 'pill-on' : ''}`}>
-          {showResolved ? 'Showing all' : 'Hiding done'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowResolved((v) => !v)} className={`pill ${showResolved ? 'pill-on' : ''}`}>
+            {showResolved ? 'Showing all' : 'Hiding done'}
+          </button>
+          {decls.length > 0 && (
+            <button onClick={exportCsv} className="pill">
+              ⬇ CSV
+            </button>
+          )}
+        </div>
       </div>
+
+      {decls.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <input
+            className="input flex-1 min-w-[12rem]"
+            placeholder="Search name or phone…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          <select className="input sm:w-52" value={carFilter} onChange={(e) => setCarFilter(e.target.value)}>
+            <option value="">All cars</option>
+            {cars.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name} — {c.driver_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {decls.length === 0 ? (
         <div className="card text-center py-10 space-y-1">
