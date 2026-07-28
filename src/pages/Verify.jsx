@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmt } from '../lib/dates'
-import { waLink, declarationText } from '../lib/wa'
+import { waLink, declarationText, driverClaimMessage } from '../lib/wa'
+import { copyText } from '../lib/clipboard'
 import PaymentModal from '../components/PaymentModal'
 
 // What riders said about their own payments (from /checkin), lined up against
@@ -65,6 +66,47 @@ const BUCKETS = [
     color: 'var(--ok)',
   },
 ]
+
+function CopyBtn({ text, label }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      onClick={async () => {
+        const ok = await copyText(text)
+        setCopied(ok ? 'yes' : 'no')
+        setTimeout(() => setCopied(false), 2200)
+      }}
+      className="btn-ghost px-3 py-1.5 text-sm"
+    >
+      {copied === 'yes' ? '✓ Copied' : copied === 'no' ? 'Copy failed' : label}
+    </button>
+  )
+}
+
+function DriverMessage({ driverName, items }) {
+  const [copied, setCopied] = useState(false)
+  const total = items.reduce((t, i) => t + Number(i.amount || 0), 0)
+
+  async function copy() {
+    const ok = await copyText(driverClaimMessage({ driverName, items }))
+    setCopied(ok ? 'yes' : 'no')
+    setTimeout(() => setCopied(false), 2200)
+  }
+
+  return (
+    <div className="divide-row flex items-center gap-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold truncate">{driverName || 'Driver not known'}</div>
+        <div className="text-sm muted">
+          {items.length} rider{items.length === 1 ? '' : 's'} · AED {total.toLocaleString()} claimed
+        </div>
+      </div>
+      <button onClick={copy} className="btn-primary px-3 py-1.5 text-sm shrink-0">
+        {copied === 'yes' ? '✓ Copied' : copied === 'no' ? 'Copy failed' : 'Copy Urdu message'}
+      </button>
+    </div>
+  )
+}
 
 export default function Verify() {
   const [decls, setDecls] = useState([])
@@ -132,6 +174,19 @@ export default function Verify() {
   const leak = rows
     .filter((r) => r.bucket === 'driver' && !r.d.resolved)
     .reduce((t, r) => t + Number(r.d.amount || 0), 0)
+
+  // One message per driver listing everyone who named him — a list with a
+  // total is much harder to shrug off than ten separate messages.
+  const byDriver = useMemo(() => {
+    const map = new Map()
+    for (const r of rows) {
+      if (r.bucket !== 'driver' || r.d.resolved) continue
+      const key = r.car?.driver_name || ''
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push({ name: r.d.name, amount: r.d.amount, when: fmt(r.d.paid_when) })
+    }
+    return [...map.entries()]
+  }, [rows])
   const ghost = rows
     .filter((r) => r.bucket === 'ghost' && !r.d.resolved)
     .reduce((t, r) => t + Number(r.d.amount || 0), 0)
@@ -269,6 +324,19 @@ export default function Verify() {
             </div>
           </div>
 
+          {byDriver.length > 0 && (
+            <div className="card">
+              <div className="font-semibold">Message for the drivers group</div>
+              <p className="text-xs dim mb-1">
+                Urdu, with Roman Urdu under it. One message per driver, listing every rider who named him and the
+                total. Copy it, then paste it in the drivers group.
+              </p>
+              {byDriver.map(([driverName, items]) => (
+                <DriverMessage key={driverName || 'unknown'} driverName={driverName} items={items} />
+              ))}
+            </div>
+          )}
+
           {BUCKETS.map((b) => {
             const items = visible.filter((r) => r.bucket === b.key)
             if (items.length === 0) return null
@@ -355,6 +423,15 @@ export default function Verify() {
                         >
                           Ask on WhatsApp
                         </a>
+                        {b.key === 'driver' && (
+                          <CopyBtn
+                            label="Urdu msg for driver"
+                            text={driverClaimMessage({
+                              driverName: car?.driver_name,
+                              items: [{ name: d.name, amount: d.amount, when: fmt(d.paid_when) }],
+                            })}
+                          />
+                        )}
                         {member && (
                           <button onClick={() => setPayFor(member)} className="btn-ghost px-3 py-1.5 text-sm">
                             + Record payment
