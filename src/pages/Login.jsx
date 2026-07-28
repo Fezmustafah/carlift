@@ -25,15 +25,17 @@ export default function Login({ session }) {
 
   return (
     <div className="min-h-screen grid place-items-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm card p-6 space-y-4">
-        <div>
-          <h1 className="text-xl font-bold text-emerald-700">Carlift Ops</h1>
-          <p className="text-sm text-stone-500">Owner login</p>
+      <form onSubmit={submit} className="w-full max-w-sm card p-6 space-y-4 pop-in">
+        <div className="text-center space-y-1">
+          <div className="text-3xl">🚐</div>
+          <h1 className="text-xl font-extrabold tracking-tight brand-text">Car Lift</h1>
+          <p className="text-sm muted">Office login</p>
         </div>
         <input
           className="input"
           type="email"
           required
+          autoComplete="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -42,14 +44,20 @@ export default function Login({ session }) {
           className="input"
           type="password"
           required
+          autoComplete="current-password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
-        {err && <p className="text-sm text-red-600">{err}</p>}
+        {err && (
+          <p className="text-sm" style={{ color: 'var(--bad)' }}>
+            {err}
+          </p>
+        )}
         <button disabled={busy} className="btn-primary w-full">
           {busy ? 'Logging in…' : 'Login'}
         </button>
+        <p className="text-xs dim text-center">Riders don't log in — they use the QR link.</p>
       </form>
     </div>
   )

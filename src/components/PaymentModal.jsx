@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { todayISO, addDays, planEnd, daysLeft } from '../lib/dates'
+import { todayISO, addDays, planEnd, daysLeft, fmt } from '../lib/dates'
 import { latestEnd } from '../lib/status'
 import { waLink, receiptText } from '../lib/wa'
 
 export default function PaymentModal({ member, cars, onClose, onSaved }) {
   const prevEnd = latestEnd(member)
-  const defaultStart = prevEnd && daysLeft(prevEnd) >= 0 ? addDays(prevEnd, 1) : todayISO()
+  const stillRunning = prevEnd && daysLeft(prevEnd) >= 0
+  const defaultStart = stillRunning ? addDays(prevEnd, 1) : todayISO()
 
   const [plan, setPlan] = useState(member.plan_pref === '15d' ? '15d' : '30d')
   const [amount, setAmount] = useState('')
@@ -21,6 +22,7 @@ export default function PaymentModal({ member, cars, onClose, onSaved }) {
 
   async function save(e) {
     e.preventDefault()
+    if (busy) return
     setBusy(true)
     setErr('')
     const sub = {
@@ -46,15 +48,15 @@ export default function PaymentModal({ member, cars, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-20 bg-black/40 grid place-items-center p-4" onClick={onClose}>
-      <div className="card w-full max-w-md p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 bg-black/50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="card w-full max-w-md p-5 space-y-4 pop-in my-8" onClick={(e) => e.stopPropagation()}>
         {saved ? (
           <div className="text-center space-y-4 py-2">
             <div className="text-4xl">✅</div>
             <div>
               <p className="font-semibold">Payment saved — {member.name}</p>
-              <p className="text-sm text-stone-500">
-                AED {saved.amount} · {saved.start_date} → {saved.end_date}
+              <p className="text-sm muted">
+                AED {saved.amount} · {fmt(saved.start_date)} → {fmt(saved.end_date)}
               </p>
             </div>
             <a
@@ -71,23 +73,33 @@ export default function PaymentModal({ member, cars, onClose, onSaved }) {
           </div>
         ) : (
           <form onSubmit={save} className="space-y-4">
-            <h2 className="text-lg font-bold">
-              Payment — {member.name}
-            </h2>
+            <div>
+              <h2 className="text-lg font-bold">Payment — {member.name}</h2>
+              {stillRunning && (
+                <p className="text-xs muted mt-0.5">
+                  Current plan runs to {fmt(prevEnd)} — the new one starts the day after.
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               {['15d', '30d'].map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setPlan(p)}
-                  className={`rounded-xl border-2 py-3 font-semibold ${
-                    plan === p ? 'border-emerald-600 bg-emerald-50' : 'border-stone-200'
-                  }`}
+                  className="rounded-xl py-3 font-semibold transition"
+                  style={{
+                    border: `2px solid ${plan === p ? 'var(--brand)' : 'var(--border-strong)'}`,
+                    background: plan === p ? 'var(--brand-soft)' : 'var(--surface)',
+                    color: plan === p ? 'var(--brand-soft-fg)' : 'var(--text)',
+                  }}
                 >
                   {p === '15d' ? '15 days' : '30 days'}
                 </button>
               ))}
             </div>
+
             <div>
               <label className="label">Amount (AED)</label>
               <input
@@ -101,25 +113,39 @@ export default function PaymentModal({ member, cars, onClose, onSaved }) {
                 autoFocus
               />
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Start</label>
-                <input className="input" type="date" required value={start} onChange={(e) => setStart(e.target.value)} />
+                <input
+                  className="input"
+                  type="date"
+                  required
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
               </div>
               <div>
                 <label className="label">Ends</label>
-                <div className="input bg-stone-100 text-stone-600">{end}</div>
+                <div className="input sunken">{fmt(end)}</div>
               </div>
             </div>
+
             <div>
               <label className="label">Paid via</label>
               <select className="input" value={paidVia} onChange={(e) => setPaidVia(e.target.value)}>
-                <option value="cash">Cash to owner</option>
+                <option value="cash">Cash to office</option>
                 <option value="transfer">Bank transfer</option>
                 <option value="link">Payment link</option>
               </select>
             </div>
-            {err && <p className="text-sm text-red-600">{err}</p>}
+
+            {err && (
+              <p className="text-sm" style={{ color: 'var(--bad)' }}>
+                {err}
+              </p>
+            )}
+
             <div className="flex gap-2">
               <button type="button" onClick={onClose} className="btn-ghost flex-1">
                 Cancel

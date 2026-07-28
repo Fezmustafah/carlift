@@ -5,12 +5,15 @@ const office = import.meta.env.VITE_OFFICE_WHATSAPP
 function Rule({ n, en, tl }) {
   return (
     <li className="card flex gap-3 items-start">
-      <span className="shrink-0 w-8 h-8 rounded-full bg-emerald-600 text-white font-bold grid place-items-center">
+      <span
+        className="shrink-0 w-8 h-8 rounded-full font-bold grid place-items-center"
+        style={{ background: 'var(--brand)', color: 'var(--brand-fg)' }}
+      >
         {n}
       </span>
       <div>
-        <p className="font-semibold text-stone-900">{en}</p>
-        <p className="text-sm text-stone-500">{tl}</p>
+        <p className="font-semibold">{en}</p>
+        <p className="text-sm muted">{tl}</p>
       </div>
     </li>
   )
@@ -20,16 +23,17 @@ export default function Rules() {
   return (
     <div className="min-h-screen p-4">
       <div className="max-w-md mx-auto space-y-5 pb-16">
-        <div className="pt-4 text-center">
-          <h1 className="text-2xl font-bold text-emerald-700">Car Lift — Rules</h1>
-          <p className="text-stone-500">Mga patakaran ng car lift</p>
+        <div className="pt-4 text-center space-y-1">
+          <div className="text-3xl">🚐</div>
+          <h1 className="text-2xl font-extrabold tracking-tight brand-text">Car Lift — Rules</h1>
+          <p className="muted">Mga patakaran ng car lift</p>
         </div>
 
         <ol className="space-y-2.5">
           <Rule
             n="1"
-            en="Register once by scanning the QR code in the car."
-            tl="Mag-register nang isang beses sa pag-scan ng QR code sa sasakyan."
+            en="Register once — scan the QR code in the car or use the link from the group."
+            tl="Mag-register nang isang beses — i-scan ang QR sa sasakyan o gamitin ang link sa group."
           />
           <Rule
             n="2"
@@ -61,13 +65,17 @@ export default function Rules() {
         {office && (
           <a
             href={waLink(office, 'Hi, I have a question about the car lift.')}
-            className="btn-primary block text-center text-lg py-3.5"
+            className="btn-primary btn-lg block text-center"
           >
             💬 WhatsApp Office
           </a>
         )}
 
-        <p className="text-xs text-stone-400 text-center">
+        <a href="/join" className="btn-ghost block text-center">
+          Register my seat / Mag-register
+        </a>
+
+        <p className="text-xs dim text-center">
           Not registered yet? Scan the QR in your car or ask the office for the link.
           <br />
           Hindi ka pa naka-register? I-scan ang QR sa sasakyan mo.

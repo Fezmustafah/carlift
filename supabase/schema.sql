@@ -53,6 +53,25 @@ create table expenses (
   created_at timestamptz not null default now()
 );
 
+-- What an existing rider says about their own payment, in their own words.
+-- Compared against subscriptions on the Verify page.
+create table declarations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text not null,
+  car_id uuid references cars(id),
+  shift text,
+  plan_pref text,
+  paid text not null,                      -- yes | no | unsure
+  paid_to text,                            -- driver | office | transfer | unsure
+  paid_when date,
+  amount numeric,
+  note text,
+  resolved boolean not null default false,
+  resolved_note text,
+  created_at timestamptz not null default now()
+);
+
 create table spot_checks (
   id uuid primary key default gen_random_uuid(),
   date date not null default current_date,
@@ -70,9 +89,21 @@ insert into cars (name, driver_name, seats) values
   ('Car 2 — Previa', 'Driver 2', 7),
   ('Car 3 — Previa', 'Driver 3', 7);
 
+-- One live registration per WhatsApp number. A rider marked 'left' may register
+-- again later; an active one cannot register twice. The join form turns the
+-- resulting unique violation into an "Already registered" screen.
+create unique index members_phone_live_uniq on members (phone) where status <> 'left';
+
+create index members_car_id_idx on members (car_id);
+create index declarations_phone_idx on declarations (phone);
+create index declarations_resolved_idx on declarations (resolved);
+create index subscriptions_member_id_idx on subscriptions (member_id);
+create index subscriptions_end_date_idx on subscriptions (end_date);
+
 -- Row Level Security
 alter table cars enable row level security;
 alter table members enable row level security;
+alter table declarations enable row level security;
 alter table subscriptions enable row level security;
 alter table onetime_rides enable row level security;
 alter table expenses enable row level security;
@@ -81,7 +112,9 @@ alter table spot_checks enable row level security;
 -- Public (riders via QR form): may list cars and register themselves as pending only.
 create policy "anon read cars" on cars for select to anon using (true);
 create policy "anon register" on members for insert to anon
-  with check (source = 'qr' and status = 'pending');
+  with check (source in ('qr', 'checkin') and status = 'pending');
+-- Riders may drop a payment declaration; they can never read the pile.
+create policy "anon declare" on declarations for insert to anon with check (true);
 
 -- Authenticated (owner/ops): full access.
 create policy "auth cars" on cars for all to authenticated using (true) with check (true);
@@ -90,3 +123,4 @@ create policy "auth subscriptions" on subscriptions for all to authenticated usi
 create policy "auth onetime" on onetime_rides for all to authenticated using (true) with check (true);
 create policy "auth expenses" on expenses for all to authenticated using (true) with check (true);
 create policy "auth spot_checks" on spot_checks for all to authenticated using (true) with check (true);
+create policy "auth declarations" on declarations for all to authenticated using (true) with check (true);

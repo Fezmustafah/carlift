@@ -25,6 +25,7 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
 
   async function save(e) {
     e.preventDefault()
+    if (busy) return
     setBusy(true)
     setErr('')
     const row = {
@@ -40,7 +41,12 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
       : supabase.from('members').update(row).eq('id', member.id)
     const { error } = await q
     if (error) {
-      setErr(error.message)
+      // 23505 = unique violation on phone: this rider is already on the list.
+      setErr(
+        error.code === '23505'
+          ? 'This WhatsApp number is already on the members list. Search for it instead of adding again.'
+          : error.message
+      )
       setBusy(false)
       return
     }
@@ -49,8 +55,8 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-20 bg-black/40 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
-      <form onSubmit={save} className="card w-full max-w-md p-5 space-y-3 my-8" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-30 bg-black/50 grid place-items-center p-4 overflow-y-auto" onClick={onClose}>
+      <form onSubmit={save} className="card w-full max-w-md p-5 space-y-3 my-8 pop-in" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold">{isNew ? 'Add member' : `Edit — ${member.name}`}</h2>
         <div>
           <label className="label">Name</label>
@@ -58,7 +64,13 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
         </div>
         <div>
           <label className="label">WhatsApp number</label>
-          <input className="input" required type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+          <input
+            className="input"
+            required
+            type="tel"
+            value={form.phone}
+            onChange={(e) => set('phone', e.target.value)}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -108,7 +120,11 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
           <label className="label">Notes</label>
           <input className="input" value={form.notes} onChange={(e) => set('notes', e.target.value)} />
         </div>
-        {err && <p className="text-sm text-red-600">{err}</p>}
+        {err && (
+          <p className="text-sm" style={{ color: 'var(--bad)' }}>
+            {err}
+          </p>
+        )}
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={onClose} className="btn-ghost flex-1">
             Cancel

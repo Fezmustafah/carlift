@@ -1,27 +1,239 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------
+   Design tokens. One palette, light + dark, used by every class
+   below. Pages should use these classes (.card, .muted, .btn-*)
+   instead of raw stone-/emerald- utilities so dark mode stays right.
+   --------------------------------------------------------------- */
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #f2f2ee;
+  --border: #e4e4dd;
+  --border-strong: #d3d3c9;
+  --text: #1b1c19;
+  --muted: #6d7069;
+  --dim: #9a9d95;
+
+  --brand: #047857;
+  --brand-hover: #036349;
+  --brand-fg: #ffffff;
+  --brand-soft: #d9f2e7;
+  --brand-soft-fg: #04624a;
+
+  --ok: #047857;
+  --ok-soft: #d9f2e7;
+  --warn: #b45309;
+  --warn-soft: #fdefd6;
+  --bad: #be2828;
+  --bad-soft: #fbdede;
+  --info: #0369a1;
+  --info-soft: #dbeefc;
+
+  --ring: color-mix(in srgb, var(--brand) 35%, transparent);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101312;
+    --surface: #181c1a;
+    --surface-2: #1f2422;
+    --border: #2a302d;
+    --border-strong: #3a423e;
+    --text: #ecefec;
+    --muted: #9ba49f;
+    --dim: #6f7a75;
+
+    --brand: #34d399;
+    --brand-hover: #4ade9f;
+    --brand-fg: #06231a;
+    --brand-soft: #0c3a2c;
+    --brand-soft-fg: #7ff0c4;
+
+    --ok: #34d399;
+    --ok-soft: #0c3a2c;
+    --warn: #fbbf24;
+    --warn-soft: #3d2f0c;
+    --bad: #f87171;
+    --bad-soft: #431d1d;
+    --info: #60a5fa;
+    --info-soft: #102c47;
+
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--brand-soft-fg);
+}
+
+/* --- text helpers ------------------------------------------------ */
+.muted {
+  color: var(--muted);
+}
+.dim {
+  color: var(--dim);
+}
+.brand-text {
+  color: var(--brand);
+}
+.h1 {
+  @apply text-xl font-bold tracking-tight;
+}
+.h2 {
+  @apply text-base font-bold tracking-tight;
+}
+
+/* --- surfaces ---------------------------------------------------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  @apply rounded-2xl p-4;
+}
+.card-tight {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  @apply rounded-xl p-3;
+}
+.sunken {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  @apply rounded-xl;
+}
+.divide-row + .divide-row {
+  border-top: 1px solid var(--border);
+}
+
+/* --- form -------------------------------------------------------- */
 .input {
-  @apply w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-base outline-none focus:border-emerald-500;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  @apply w-full rounded-xl px-3 py-2.5 text-base outline-none transition;
+}
+.input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+.input::placeholder {
+  color: var(--dim);
+}
+.input-lg {
+  @apply rounded-2xl px-4 py-4 text-xl;
+  border-width: 2px;
 }
 .label {
-  @apply block text-sm font-medium text-stone-600 mb-1;
+  color: var(--muted);
+  @apply block text-sm font-medium mb-1;
 }
+
+/* --- buttons ----------------------------------------------------- */
 .btn-primary {
-  @apply rounded-xl bg-emerald-600 px-4 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed;
+  background: var(--brand);
+  color: var(--brand-fg);
+  @apply rounded-xl px-4 py-2.5 font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-hover);
 }
 .btn-ghost {
-  @apply rounded-xl border border-stone-300 bg-white px-4 py-2.5 font-medium text-stone-700 hover:bg-stone-100;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  @apply rounded-xl px-4 py-2.5 font-medium transition active:scale-[0.98];
 }
-.card {
-  @apply bg-white rounded-2xl border border-stone-200 p-4;
+.btn-ghost:hover {
+  background: var(--surface-2);
 }
+.btn-danger {
+  background: var(--bad-soft);
+  color: var(--bad);
+  @apply rounded-xl px-4 py-2.5 font-semibold transition active:scale-[0.98];
+}
+.btn-lg {
+  @apply text-lg py-3.5;
+}
+
+/* --- chips ------------------------------------------------------- */
 .chip {
   @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
 }
+.chip-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.chip-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.chip-bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.chip-info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.chip-mute {
+  background: var(--surface-2);
+  color: var(--muted);
+}
 
-.qr-card {
-  -webkit-print-color-adjust: exact;
-  print-color-adjust: exact;
+/* Filter pills (tap targets, not labels) */
+.pill {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border-strong);
+  @apply rounded-full px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition;
+}
+.pill-on {
+  background: var(--brand);
+  color: var(--brand-fg);
+  border-color: var(--brand);
+}
+
+/* --- occupancy bar ----------------------------------------------- */
+.bar {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  @apply h-2.5 w-full rounded-full overflow-hidden;
+}
+.bar-fill {
+  background: var(--brand);
+  @apply h-full rounded-full transition-all duration-500;
+}
+.bar-fill-warn {
+  background: var(--warn);
+}
+
+/* --- avatar ------------------------------------------------------ */
+.avatar {
+  background: var(--brand-soft);
+  color: var(--brand-soft-fg);
+  @apply shrink-0 grid place-items-center rounded-full font-bold;
+}
+
+/* --- misc -------------------------------------------------------- */
+.skeleton {
+  background: var(--surface-2);
+  @apply rounded-xl animate-pulse;
+}
+
+.safe-b {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @keyframes stepIn {
@@ -38,10 +250,48 @@
   animation: stepIn 0.22s ease-out;
 }
 
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.pop-in {
+  animation: popIn 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-in,
+  .pop-in,
+  .bar-fill {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* --- print (QR cards) -------------------------------------------- */
+/* Cards stay black-on-white paper regardless of screen theme. */
+.qr-card,
+.mini-card {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  background: #ffffff;
+  color: #111111;
+}
+
 @media print {
   header,
+  nav,
   .no-print {
     display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
   }
   main {
     max-width: none !important;
