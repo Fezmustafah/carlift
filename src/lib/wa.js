@@ -1,3 +1,11 @@
+import { bankLines } from './bank'
+
+// "2026-07" -> "July"
+export function monthName(key) {
+  if (!/^\d{4}-\d{2}$/.test(key || '')) return ''
+  return new Date(`${key}-01T00:00:00`).toLocaleDateString('en-GB', { month: 'long' })
+}
+
 export function normalizePhone(p) {
   let d = String(p || '').replace(/\D/g, '')
   if (d.startsWith('00')) d = d.slice(2)
@@ -73,11 +81,12 @@ export function driverClaimMessage({ driverName, items, dateLabel }) {
 // holding the cash.
 export function declarationText(d, driverName) {
   const amount = d.amount ? `AED ${Number(d.amount)}` : 'your payment'
+  const month = monthName(d.for_month)
   if (d.paid === 'yes' && d.paid_to === 'driver') {
     return [
       '🚐 Car Lift — payment check',
       `${d.name}, thank you for answering.`,
-      `You said you paid ${amount} to ${driverName || 'the driver'} on ${d.paid_when}.`,
+      `You said you paid ${amount} to ${driverName || 'the driver'} on ${d.paid_when}${month ? ` for ${month}` : ''}.`,
       'We are checking this against our records. If you have a photo or any detail of that payment, please send it here.',
       '',
       'From 5–10 August, please pay the office only. Payment to a driver is not counted.',
@@ -86,15 +95,22 @@ export function declarationText(d, driverName) {
   if (d.paid === 'yes') {
     return [
       '🚐 Car Lift — payment check',
-      `${d.name}, you said you paid ${amount} on ${d.paid_when}, but we cannot find it in our records.`,
-      'Please send the screenshot or tell us how you paid, so we can update your seat.',
+      `${d.name}, you said you paid ${amount} on ${d.paid_when}${month ? ` for ${month}` : ''}, but we cannot find it in our records.`,
+      'Please send the screenshot, or tell us how you paid, so we can update your seat.',
     ].join('\n')
   }
+  // Not paid yet — give them everything they need to pay, so nobody has to ask.
   return [
     '🚐 Car Lift — payment',
     `${d.name}, thank you for answering.`,
-    'Collection is 5–10 August, to the office only. Please pay in that period to keep your seat.',
+    `Your payment${month ? ` for ${month}` : ''} is still not received.`,
+    '',
+    'Collection is 5–10 August, to the office only.',
     'Payment to a driver is not counted.',
+    '',
+    ...bankLines(),
+    '',
+    'Tagalog: Hindi pa po natatanggap ang bayad niyo. Sa opisina lamang po, Agosto 5–10. Pagkatapos magbayad, ipadala po ang screenshot.',
   ].join('\n')
 }
 

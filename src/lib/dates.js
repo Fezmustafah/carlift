@@ -24,6 +24,22 @@ export function fmt(iso) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+const TL_MONTHS = [
+  'Enero', 'Pebrero', 'Marso', 'Abril', 'Mayo', 'Hunyo',
+  'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre',
+]
+
+// Riders were answering "have you paid?" about whichever month they had in mind.
+// Naming the running month removes the guess.
+export function currentMonth() {
+  const d = new Date()
+  return {
+    key: todayISO().slice(0, 7),                                     // 2026-07
+    en: d.toLocaleDateString('en-GB', { month: 'long' }),            // July
+    tl: TL_MONTHS[d.getMonth()],                                     // Hulyo
+  }
+}
+
 export function monthStartISO() {
   return todayISO().slice(0, 8) + '01'
 }

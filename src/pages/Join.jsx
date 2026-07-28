@@ -3,6 +3,7 @@ import { supabase, hasSupabase } from '../lib/supabase'
 import { normalizePhone, waLink } from '../lib/wa'
 import { todayISO, addDays, planEnd, fmt } from '../lib/dates'
 import Choice from '../components/Choice'
+import BankDetails from '../components/BankDetails'
 
 const AREAS = [
   { v: 'Sobha Hartland', en: 'Sobha Hartland' },
@@ -277,6 +278,8 @@ export default function Join() {
               )}
             </div>
           )}
+
+          {done && <BankDetails compact />}
 
           {community && (
             <a href={community} target="_blank" rel="noreferrer" className="btn-primary btn-lg block">

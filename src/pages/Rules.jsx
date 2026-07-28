@@ -1,4 +1,5 @@
 import { waLink } from '../lib/wa'
+import BankDetails from '../components/BankDetails'
 
 const office = import.meta.env.VITE_OFFICE_WHATSAPP
 const community = import.meta.env.VITE_COMMUNITY_LINK
@@ -77,6 +78,8 @@ export default function Rules() {
             tl="Walang resibo = hindi kumpirmado ang seat. Kung may problema, i-message ang opisina."
           />
         </ol>
+
+        <BankDetails />
 
         {office && (
           <div

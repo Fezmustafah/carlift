@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fmt } from '../lib/dates'
-import { waLink, declarationText, driverClaimMessage } from '../lib/wa'
+import { waLink, declarationText, driverClaimMessage, monthName } from '../lib/wa'
 import { copyText } from '../lib/clipboard'
 import PaymentModal from '../components/PaymentModal'
 
@@ -201,8 +201,7 @@ export default function Verify() {
       'gender',
       'car',
       'driver',
-      'shift',
-      'plan',
+      'for_month',
       'paid',
       'paid_to',
       'paid_when',
@@ -221,8 +220,7 @@ export default function Verify() {
         d.gender,
         car?.name,
         car?.driver_name,
-        d.shift,
-        d.plan_pref,
+        d.for_month,
         d.paid,
         d.paid_to,
         d.paid_when,
@@ -366,8 +364,8 @@ export default function Verify() {
                           <div className="text-sm muted">
                             {d.phone}
                             {car ? ` · ${car.name}` : ''}
-                            {d.shift ? ` · ${d.shift}` : ''}
-                            {d.plan_pref ? ` · ${d.plan_pref}` : ''}
+                            {d.gender ? ` · ${d.gender === 'female' ? 'F' : 'M'}` : ''}
+                            {monthName(d.for_month) ? ` · about ${monthName(d.for_month)}` : ''}
                           </div>
                         </div>
                         <div className="text-xs dim shrink-0">{fmt((d.created_at || '').slice(0, 10))}</div>

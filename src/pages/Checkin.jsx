@@ -1,31 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, hasSupabase } from '../lib/supabase'
 import { normalizePhone, waLink } from '../lib/wa'
-import { todayISO, addDays, fmt } from '../lib/dates'
+import { todayISO, addDays, fmt, currentMonth } from '../lib/dates'
 import Choice from '../components/Choice'
+import BankDetails from '../components/BankDetails'
 
-// Existing riders only. Newcomers use /join.
-// The point of this form is one question: did the money reach the office,
-// and if not, who is holding it.
+// Existing riders only. Newcomers use /register.
+// Kept deliberately short — every extra question loses answers. Shift and plan
+// are not asked here; the office confirms those in person during collection.
 
-const SHIFTS = [
-  { v: 'morning', en: 'Morning', tl: 'Umaga' },
-  { v: 'night', en: 'Evening / Night', tl: 'Gabi' },
-  { v: 'both', en: 'Both', tl: 'Pareho' },
-]
-const PLANS = [
-  { v: '30d', en: 'Monthly (30 days)', tl: 'Buwanan' },
-  { v: '15d', en: '15 days', tl: '15 araw' },
-  { v: 'onetime', en: 'Sometimes only', tl: 'Paminsan-minsan lang' },
-]
 const GENDERS = [
   { v: 'male', en: 'Male', tl: 'Lalaki' },
   { v: 'female', en: 'Female', tl: 'Babae' },
-]
-const PAID = [
-  { v: 'yes', en: 'Yes, I paid', tl: 'Oo, nakabayad na ako' },
-  { v: 'no', en: 'Not yet', tl: 'Hindi pa' },
-  { v: 'unsure', en: "I'm not sure", tl: 'Hindi ako sigurado' },
 ]
 
 const phoneOk = (p) => normalizePhone(p).length >= 11
@@ -44,17 +30,22 @@ function loadDraft() {
 }
 
 export default function Checkin() {
+  const month = useMemo(currentMonth, [])
   const [cars, setCars] = useState([])
   const preCarId = useMemo(() => new URLSearchParams(window.location.search).get('car') || '', [])
   const draft = useMemo(loadDraft, [])
+
+  const PAID = [
+    { v: 'yes', en: `Yes, I paid for ${month.en}`, tl: `Oo, bayad na po ako para sa ${month.tl}` },
+    { v: 'no', en: `Not yet for ${month.en}`, tl: `Hindi pa po para sa ${month.tl}` },
+    { v: 'unsure', en: "I'm not sure", tl: 'Hindi po ako sigurado' },
+  ]
 
   const [a, setA] = useState(() => ({
     name: '',
     phone: '',
     gender: '',
     car_id: preCarId,
-    shift: '',
-    plan: '',
     paid: '',
     paid_to: '',
     paid_when: todayISO(),
@@ -119,40 +110,41 @@ export default function Checkin() {
         options: cars.map((c) => ({ v: c.id, en: c.name, tl: `Driver: ${c.driver_name}` })),
       })
     }
-    s.push({ key: 'shift', type: 'choice', q: 'Which time?', tl: 'Anong oras?', options: SHIFTS })
-    s.push({ key: 'plan', type: 'choice', q: 'Which plan are you on?', tl: 'Anong plano mo?', options: PLANS })
     s.push({
       key: 'paid',
       type: 'choice',
-      q: 'Have you paid for your current period?',
-      tl: 'Nakabayad ka na ba para sa kasalukuyang plano mo?',
+      q: `Have you paid for ${month.en}?`,
+      tl: `Bayad na po ba kayo para sa buwan ng ${month.tl}?`,
       options: PAID,
+      hint: `This month only — ${month.en}. Not the next month.`,
     })
     if (a.paid === 'yes') {
       s.push({
         key: 'paid_to',
         type: 'choice',
         q: 'Who did you give the money to?',
-        tl: 'Kanino mo ibinigay ang bayad?',
+        tl: 'Kanino mo po ibinigay ang bayad?',
         options: [
           { v: 'driver', en: driver ? `The driver (${driver})` : 'The driver', tl: 'Sa driver' },
           { v: 'office', en: 'The office — cash', tl: 'Sa opisina — cash' },
           { v: 'transfer', en: 'Bank transfer to the office', tl: 'Bank transfer sa opisina' },
-          { v: 'unsure', en: "I don't remember", tl: 'Hindi ko na maalala' },
+          { v: 'unsure', en: "I don't remember", tl: 'Hindi ko na po maalala' },
         ],
       })
-      s.push({ key: 'paid_when', type: 'when', q: 'When did you pay?', tl: 'Kailan ka nagbayad?' })
+      s.push({ key: 'paid_when', type: 'when', q: 'When did you pay?', tl: 'Kailan po kayo nagbayad?' })
       s.push({
         key: 'amount',
         type: 'number',
         q: 'How much did you pay? (AED)',
-        tl: 'Magkano ang binayad mo? (AED)',
+        tl: 'Magkano po ang binayad niyo? (AED)',
         ph: 'e.g. 400',
+        skippable: true,
       })
     }
-    s.push({ key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma' })
+    s.push({ key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma po' })
     return s
-  }, [cars, a.paid, driver])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cars, a.paid, driver, month.en, month.tl])
 
   const total = steps.length
   const idx = Math.min(step, total - 1)
@@ -177,9 +169,8 @@ export default function Checkin() {
       phone,
       gender: a.gender || null,
       car_id: a.car_id || null,
-      shift: a.shift || null,
-      plan_pref: a.plan || null,
       paid: a.paid,
+      for_month: month.key,
       paid_to: a.paid === 'yes' ? a.paid_to || 'unsure' : null,
       paid_when: a.paid === 'yes' ? a.paid_when : null,
       amount: a.paid === 'yes' && a.amount ? Number(a.amount) : null,
@@ -189,7 +180,7 @@ export default function Checkin() {
       setBusy(false)
       setErr(
         /fetch|network/i.test(error.message || '')
-          ? 'No internet. Check your connection and press Confirm again. / Walang internet. Subukan muli.'
+          ? 'No internet. Check your connection and press Send again. / Walang internet. Subukan muli.'
           : 'Could not send. Please try again. / Hindi naipadala. Subukan muli.'
       )
       return
@@ -202,11 +193,9 @@ export default function Checkin() {
       phone,
       gender: a.gender || null,
       car_id: a.car_id || null,
-      shift: a.shift || 'morning',
-      plan_pref: a.plan || null,
       status: 'pending',
       source: 'checkin',
-      notes: 'From payment check-in',
+      notes: 'From payment check-in — shift and plan not asked',
     })
 
     clearDraft()
@@ -216,8 +205,8 @@ export default function Checkin() {
 
   function onNext() {
     const val = a[cur.key]
-    if (cur.required && !String(val || '').trim()) return setErr('Please fill this / Pakisagot ito')
-    if (cur.valid && !cur.valid(val)) return setErr('Enter a valid number / Ilagay ang tamang number')
+    if (cur.required && !String(val || '').trim()) return setErr('Please fill this / Pakisagot po ito')
+    if (cur.valid && !cur.valid(val)) return setErr('Enter a valid number / Ilagay po ang tamang number')
     setErr('')
     setStep((s) => s + 1)
   }
@@ -229,30 +218,32 @@ export default function Checkin() {
   }
 
   if (done) {
+    const owes = a.paid !== 'yes'
     return (
       <div className="min-h-screen grid place-items-center p-4">
-        <div className="card max-w-md w-full text-center space-y-3 p-8 pop-in">
+        <div className="card max-w-md w-full text-center space-y-3 p-6 pop-in">
           <div className="text-5xl">🙏</div>
           <h1 className="text-2xl font-bold">Thank you!</h1>
           <p className="muted">
-            Your details are with the office now. We will check our records and message you on WhatsApp.
+            Your answer is with the office. We will check our records and message you on WhatsApp.
             <br />
-            <span className="dim">
-              Nasa opisina na ang detalye mo. Titingnan namin ang record at ime-message ka namin sa WhatsApp.
-            </span>
+            <span className="dim">Nasa opisina na po ang sagot niyo. Ime-message po namin kayo sa WhatsApp.</span>
           </p>
+
           <div
             className="rounded-2xl p-3 text-sm"
             style={{ border: '2px solid var(--brand)', background: 'var(--brand-soft)', color: 'var(--brand-soft-fg)' }}
           >
-            Payments from 5–10 August go to the office only. Payment to a driver is not counted.
+            Payment goes to the office only. Payment to a driver is not counted.
             <br />
-            Mula 5–10 Agosto, sa opisina lamang ang bayad. Hindi bibilangin ang bayad sa driver.
+            Sa opisina lamang po ang bayad. Hindi bibilangin ang bayad sa driver.
           </div>
+
+          {owes && <BankDetails />}
+
           {community && (
             <a href={community} target="_blank" rel="noreferrer" className="btn-primary btn-lg block">
               💬 Join the Car Lift group
-              <span className="block text-sm font-normal opacity-90">Sumali sa group — timings and notices</span>
             </a>
           )}
           {office && (
@@ -273,7 +264,7 @@ export default function Checkin() {
       <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="pt-3">
           <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-extrabold tracking-tight brand-text">Car Lift · Payment check-in</span>
+            <span className="font-extrabold tracking-tight brand-text">Car Lift · {month.en} check-in</span>
             <span className="dim">
               {idx + 1}/{total}
             </span>
@@ -352,16 +343,8 @@ export default function Checkin() {
                   </div>
                 )}
                 <div className="flex justify-between gap-3">
-                  <span className="muted">Time</span>
-                  <b>{SHIFTS.find((x) => x.v === a.shift)?.en || '—'}</b>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="muted">Plan</span>
-                  <b>{PLANS.find((x) => x.v === a.plan)?.en || '—'}</b>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span className="muted">Paid?</span>
-                  <b>{PAID.find((x) => x.v === a.paid)?.en || '—'}</b>
+                  <span className="muted">Paid for {month.en}?</span>
+                  <b>{a.paid === 'yes' ? 'Yes' : a.paid === 'no' ? 'Not yet' : 'Not sure'}</b>
                 </div>
                 {a.paid === 'yes' && (
                   <>
@@ -383,12 +366,10 @@ export default function Checkin() {
                       <span className="muted">When</span>
                       <b>{fmt(a.paid_when)}</b>
                     </div>
-                    {a.amount && (
-                      <div className="flex justify-between gap-3">
-                        <span className="muted">Amount</span>
-                        <b>AED {a.amount}</b>
-                      </div>
-                    )}
+                    <div className="flex justify-between gap-3">
+                      <span className="muted">Amount</span>
+                      <b>{a.amount ? `AED ${a.amount}` : 'Not given'}</b>
+                    </div>
                   </>
                 )}
               </div>
@@ -419,6 +400,19 @@ export default function Checkin() {
               className="btn-ghost px-5"
             >
               ← Back
+            </button>
+          )}
+          {cur.skippable && (
+            <button
+              type="button"
+              onClick={() => {
+                set(cur.key, '')
+                setErr('')
+                setStep((s) => s + 1)
+              }}
+              className="btn-ghost px-4"
+            >
+              Skip
             </button>
           )}
           {(cur.type === 'text' || cur.type === 'tel' || cur.type === 'number') && (

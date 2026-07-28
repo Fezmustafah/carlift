@@ -65,6 +65,7 @@ create table declarations (
   shift text,
   plan_pref text,
   paid text not null,                      -- yes | no | unsure
+  for_month text,                          -- which month the answer is about, e.g. 2026-07
   paid_to text,                            -- driver | office | transfer | unsure
   paid_when date,
   amount numeric,
