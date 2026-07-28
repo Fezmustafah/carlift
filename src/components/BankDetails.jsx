@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { bank, hasBank, ibanPretty, ibanValid } from '../lib/bank'
+import { bank, hasBank, ibanValid } from '../lib/bank'
 import { copyText } from '../lib/clipboard'
 
-function CopyLine({ label, value, display }) {
+function CopyLine({ label, value }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="flex items-center gap-2">
       <div className="min-w-0 flex-1">
         <div className="text-xs dim">{label}</div>
-        <div className="font-mono font-semibold break-all">{display || value}</div>
+        <div className="font-mono font-semibold break-all">{value}</div>
       </div>
       <button
         onClick={async () => {
@@ -58,9 +58,15 @@ export default function BankDetails({ compact }) {
         </div>
       )}
 
-      <CopyLine label="IBAN" value={bank.iban} display={ibanPretty()} />
-      {!compact && bank.accountNumber && <CopyLine label="Account number" value={bank.accountNumber} />}
+      <CopyLine label={`IBAN — ${bank.iban.length} characters, no spaces`} value={bank.iban} />
+      {bank.accountNumber && <CopyLine label="Account number" value={bank.accountNumber} />}
       {!compact && bank.swift && <CopyLine label="SWIFT (from outside UAE)" value={bank.swift} />}
+
+      <p className="text-xs dim">
+        Use the Copy button. Do not type spaces in the IBAN — the bank form counts them.
+        <br />
+        Gamitin po ang Copy. Huwag pong maglagay ng space sa IBAN.
+      </p>
 
       <p className="text-sm" style={{ color: 'var(--warn)' }}>
         After you transfer, send the screenshot to the office. No screenshot, no receipt.

@@ -10,10 +10,9 @@ export const bank = {
 
 export const hasBank = Boolean(bank.iban)
 
-// AE24 0030 0134 1218 2920 001 — grouped for reading and typing, never for copying.
-export function ibanPretty(iban = bank.iban) {
-  return iban.replace(/(.{4})/g, '$1 ').trim()
-}
+// Never group the IBAN with spaces. Beneficiary forms accept exactly 23
+// characters for a UAE IBAN and count spaces, so a "nicely" spaced version
+// gets rejected or silently truncated when a rider pastes it in.
 
 // ISO 13616 mod-97. A mistyped IBAN in an env var would send riders' money nowhere.
 export function ibanValid(iban = bank.iban) {

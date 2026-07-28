@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { waLink } from '../lib/wa'
+import { hasBank } from '../lib/bank'
+import BankDetails from '../components/BankDetails'
 
 const office = import.meta.env.VITE_OFFICE_WHATSAPP
 
@@ -7,6 +10,7 @@ const office = import.meta.env.VITE_OFFICE_WHATSAPP
 // riders who already ride with us declare their payment, new ones register.
 export default function Start() {
   const { search } = useLocation() // keep ?car= so the car stays pre-selected
+  const [showBank, setShowBank] = useState(false)
 
   return (
     <div className="min-h-screen flex flex-col p-4">
@@ -47,6 +51,17 @@ export default function Start() {
             <div className="text-sm muted mt-2">Register here →</div>
           </Link>
         </div>
+
+        {/* Riders who only want to send money should not have to walk a form first. */}
+        {hasBank && (
+          <div className="space-y-3">
+            <button onClick={() => setShowBank((v) => !v)} className="btn-ghost w-full text-center">
+              🏦 I just want to pay — bank details
+              <span className="block text-sm muted font-normal">Detalye ng bangko</span>
+            </button>
+            {showBank && <BankDetails />}
+          </div>
+        )}
 
         <a href="/rules" className="btn-ghost block text-center">
           📋 Rules / Mga patakaran
