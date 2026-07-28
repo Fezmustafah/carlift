@@ -19,6 +19,10 @@ const PLANS = [
   { v: '15d', en: '15 days', tl: '15 araw' },
   { v: 'onetime', en: 'Sometimes only', tl: 'Paminsan-minsan lang' },
 ]
+const GENDERS = [
+  { v: 'male', en: 'Male', tl: 'Lalaki' },
+  { v: 'female', en: 'Female', tl: 'Babae' },
+]
 
 // Valid once it normalizes to a full UAE-length number (971 + 9 digits).
 const phoneOk = (p) => normalizePhone(p).length >= 11
@@ -44,6 +48,7 @@ export default function Join() {
   const [a, setA] = useState(() => ({
     name: '',
     phone: '',
+    gender: '',
     area: '',
     pickup: '',
     car_id: preCarId,
@@ -109,6 +114,7 @@ export default function Join() {
         valid: phoneOk,
         hint: 'The office confirms your seat here. / Dito kokompirmahin ng opisina ang seat mo.',
       },
+      { key: 'gender', type: 'choice', q: 'Male or female?', tl: 'Lalaki o babae?', options: GENDERS },
       { key: 'area', type: 'choice', q: 'Which area?', tl: 'Aling lugar?', options: AREAS },
       {
         key: 'pickup',
@@ -121,7 +127,8 @@ export default function Join() {
       { key: 'plan', type: 'choice', q: 'How long?', tl: 'Gaano katagal?', options: PLANS },
     ]
     if (cars.length && !hasCarLink) {
-      s.splice(4, 0, {
+      // Always ask the car right before the shift, whatever else is in the list.
+      s.splice(s.findIndex((x) => x.key === 'shift'), 0, {
         key: 'car_id',
         type: 'choice',
         q: 'Which car?',
@@ -158,6 +165,7 @@ export default function Join() {
     const { error } = await supabase.from('members').insert({
       name: a.name.trim(),
       phone: normalizePhone(a.phone),
+      gender: a.gender || null,
       area: a.area || null,
       pickup_point: a.pickup.trim() || null,
       car_id: a.car_id || null,
@@ -205,6 +213,7 @@ export default function Join() {
     setA({
       name: '',
       phone: '',
+      gender: '',
       area: '',
       pickup: '',
       car_id: preCarId,
@@ -463,7 +472,14 @@ export default function Join() {
           )}
         </div>
 
-        <p className="text-xs dim text-center pb-4">Payment only to office. Payment to driver is not valid.</p>
+        <p className="text-xs dim text-center pb-4">
+          Payment only to office. Payment to driver is not valid.
+          <br />
+          Already riding with us?{' '}
+          <a href="/checkin" className="underline">
+            Check in here
+          </a>
+        </p>
       </div>
     </div>
   )

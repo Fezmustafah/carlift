@@ -9,6 +9,7 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: member?.name || '',
     phone: member?.phone || '',
+    gender: member?.gender || '',
     area: member?.area || '',
     pickup_point: member?.pickup_point || '',
     car_id: member?.car_id || '',
@@ -74,6 +75,14 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
+            <label className="label">Gender</label>
+            <select className="input" value={form.gender} onChange={(e) => set('gender', e.target.value)}>
+              <option value="">—</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          <div>
             <label className="label">Area</label>
             <select className="input" value={form.area} onChange={(e) => set('area', e.target.value)}>
               <option value="">—</option>
@@ -82,10 +91,10 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
               ))}
             </select>
           </div>
-          <div>
-            <label className="label">Pickup point</label>
-            <input className="input" value={form.pickup_point} onChange={(e) => set('pickup_point', e.target.value)} />
-          </div>
+        </div>
+        <div>
+          <label className="label">Pickup point</label>
+          <input className="input" value={form.pickup_point} onChange={(e) => set('pickup_point', e.target.value)} />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

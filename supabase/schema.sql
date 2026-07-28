@@ -12,6 +12,7 @@ create table members (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   phone text not null,
+  gender text,                             -- male | female
   area text,
   pickup_point text,
   car_id uuid references cars(id),
@@ -59,6 +60,7 @@ create table declarations (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   phone text not null,
+  gender text,                             -- male | female
   car_id uuid references cars(id),
   shift text,
   plan_pref text,

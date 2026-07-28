@@ -28,9 +28,9 @@ function Card({ car }) {
       </div>
 
       <div className="text-center px-5">
-        <div className="text-xl font-extrabold text-stone-900">SCAN TO REGISTER</div>
+        <div className="text-xl font-extrabold text-stone-900">SCAN HERE</div>
         <div className="text-base text-stone-600" dir="auto">
-          I-scan para magparehistro
+          Register or check in · I-scan po
         </div>
         <div className="mt-1 text-xs text-stone-400 break-all">{url}</div>
       </div>
@@ -54,9 +54,9 @@ function MiniCard({ car }) {
       <div className="text-xs font-semibold text-stone-700 leading-tight">{car ? car.name : 'Any car'}</div>
       <QRCodeSVG value={url} size={116} level="M" marginSize={1} className="my-1.5" />
       <div className="text-[11px] font-bold text-stone-900 leading-tight">
-        SCAN TO REGISTER
+        SCAN HERE
         <br />
-        <span className="font-normal text-stone-500">I-scan para magparehistro</span>
+        <span className="font-normal text-stone-500">Register or check in</span>
       </div>
       <div className="text-[10px] font-semibold text-amber-700 leading-tight mt-1">
         Pay OFFICE only · Sa opisina lamang
@@ -155,30 +155,22 @@ export default function Cards() {
         </button>
       </div>
 
-      {/* Links to paste into the WhatsApp groups — one per car, car pre-selected. */}
+      {/* One link for everybody — it asks whether they are a rider already or new. */}
       <div className="no-print card">
-        <div className="font-semibold">Link 1 — riders already with us</div>
+        <div className="font-semibold">The link — send this one everywhere</div>
         <p className="text-xs dim mb-2">
-          Payment check-in. They tell you what they paid, to whom and when; the answers land in Verify. Send this one to
-          the existing groups.
+          It asks first: already riding with us, or new? Existing riders go to the payment check-in (answers land in
+          Verify), new ones go to registration. Use a car link inside that car's group so their car is already chosen.
         </p>
-        <CopyRow label="Check-in — general" url={checkinUrl} />
+        <CopyRow label="General link" url={joinUrl} />
         {cars.map((c) => (
-          <CopyRow key={c.id} label={`Check-in — ${c.name} (${c.driver_name})`} url={`${checkinUrl}?car=${c.id}`} />
-        ))}
-      </div>
-
-      <div className="no-print card">
-        <div className="font-semibold">Link 2 — new riders</div>
-        <p className="text-xs dim mb-2">
-          Registration. This is the link on the QR cards in the seat pouches. Only for people who are not riding with us
-          yet.
-        </p>
-        <CopyRow label="Register — general" url={joinUrl} />
-        {cars.map((c) => (
-          <CopyRow key={c.id} label={`Register — ${c.name} (${c.driver_name})`} url={`${joinUrl}?car=${c.id}`} />
+          <CopyRow key={c.id} label={`${c.name} — ${c.driver_name}`} url={`${joinUrl}?car=${c.id}`} />
         ))}
         <CopyRow label="Rules page (pin this in the group)" url={`${window.location.origin}/rules`} />
+        <p className="text-xs dim mt-2">
+          Direct links, if you ever need to skip the question: {checkinUrl} (check-in) · {window.location.origin}
+          /register (new riders).
+        </p>
       </div>
 
       {mode === 'seat' ? (

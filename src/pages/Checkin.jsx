@@ -18,6 +18,10 @@ const PLANS = [
   { v: '15d', en: '15 days', tl: '15 araw' },
   { v: 'onetime', en: 'Sometimes only', tl: 'Paminsan-minsan lang' },
 ]
+const GENDERS = [
+  { v: 'male', en: 'Male', tl: 'Lalaki' },
+  { v: 'female', en: 'Female', tl: 'Babae' },
+]
 const PAID = [
   { v: 'yes', en: 'Yes, I paid', tl: 'Oo, nakabayad na ako' },
   { v: 'no', en: 'Not yet', tl: 'Hindi pa' },
@@ -47,6 +51,7 @@ export default function Checkin() {
   const [a, setA] = useState(() => ({
     name: '',
     phone: '',
+    gender: '',
     car_id: preCarId,
     shift: '',
     plan: '',
@@ -102,6 +107,7 @@ export default function Checkin() {
         valid: phoneOk,
         hint: 'We match your payment record with this number. / Dito namin ihahanap ang record mo.',
       },
+      { key: 'gender', type: 'choice', q: 'Male or female?', tl: 'Lalaki o babae?', options: GENDERS },
     ]
     if (cars.length) {
       s.push({
@@ -168,6 +174,7 @@ export default function Checkin() {
     const { error } = await supabase.from('declarations').insert({
       name: a.name.trim(),
       phone,
+      gender: a.gender || null,
       car_id: a.car_id || null,
       shift: a.shift || null,
       plan_pref: a.plan || null,
@@ -192,6 +199,7 @@ export default function Checkin() {
     await supabase.from('members').insert({
       name: a.name.trim(),
       phone,
+      gender: a.gender || null,
       car_id: a.car_id || null,
       shift: a.shift || 'morning',
       plan_pref: a.plan || null,
@@ -431,7 +439,11 @@ export default function Checkin() {
         </div>
 
         <p className="text-xs dim text-center pb-4">
-          New rider? Use the registration link instead. / Bago? Gamitin ang registration link.
+          Not riding with us yet?{' '}
+          <a href="/register" className="underline">
+            Register here
+          </a>{' '}
+          / Bago pa lang po?
         </p>
       </div>
     </div>

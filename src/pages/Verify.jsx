@@ -143,6 +143,7 @@ export default function Verify() {
     const head = [
       'name',
       'phone',
+      'gender',
       'car',
       'driver',
       'shift',
@@ -162,6 +163,7 @@ export default function Verify() {
       return [
         d.name,
         d.phone,
+        d.gender,
         car?.name,
         car?.driver_name,
         d.shift,

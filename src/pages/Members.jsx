@@ -132,6 +132,7 @@ export default function Members() {
                 </div>
                 <div className="text-sm muted truncate">
                   {m.phone} · {carName(m.car_id)} · {m.shift}
+                  {m.gender ? ` · ${m.gender === 'female' ? 'F' : 'M'}` : ''}
                   {m.pickup_point ? ` · ${m.pickup_point}` : ''}
                 </div>
               </div>

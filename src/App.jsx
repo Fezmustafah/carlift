@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { supabase, hasSupabase } from './lib/supabase'
 import Shell from './components/Shell'
+import Start from './pages/Start'
 import Join from './pages/Join'
 import Checkin from './pages/Checkin'
 import Login from './pages/Login'
@@ -53,7 +54,9 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/join" element={<Join />} />
+      {/* One public link: /join asks which kind of rider you are, then forks. */}
+      <Route path="/join" element={<Start />} />
+      <Route path="/register" element={<Join />} />
       <Route path="/checkin" element={<Checkin />} />
       <Route path="/rules" element={<Rules />} />
       <Route path="/login" element={<Login session={session} />} />
