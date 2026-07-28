@@ -10,6 +10,16 @@ import PaymentModal from '../components/PaymentModal'
 
 const NEAR_DAYS = 12 // a claimed date this close to a recorded payment counts as the same payment
 
+// "Juan  Dela-Cruz" and "juan dela cruz" are the same rider on paper.
+function nameKey(n) {
+  return String(n || '')
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+}
+
 function daysApart(a, b) {
   if (!a || !b) return Infinity
   return Math.abs((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000)
@@ -88,9 +98,23 @@ export default function Verify() {
 
   const rows = useMemo(() => {
     const byPhone = new Map(members.map((m) => [m.phone, m]))
+    // The old paper register has names, not phone numbers, so a rider seeded
+    // from it will not match on phone. Fall back to the name.
+    const byName = new Map()
+    for (const m of members) {
+      const k = nameKey(m.name)
+      if (k && !byName.has(k)) byName.set(k, m)
+    }
     return decls.map((d) => {
-      const member = byPhone.get(d.phone) || null
-      return { d, member, car: cars.find((c) => c.id === d.car_id) || null, bucket: classify(d, member) }
+      const byPhoneHit = byPhone.get(d.phone) || null
+      const member = byPhoneHit || byName.get(nameKey(d.name)) || null
+      return {
+        d,
+        member,
+        matchedByName: Boolean(!byPhoneHit && member),
+        car: cars.find((c) => c.id === d.car_id) || null,
+        bucket: classify(d, member),
+      }
     })
   }, [decls, members, cars])
 
@@ -171,7 +195,7 @@ export default function Verify() {
                   <p className="text-xs dim">{b.blurb}</p>
                 </div>
 
-                {items.map(({ d, member, car }) => {
+                {items.map(({ d, member, car, matchedByName }) => {
                   const subs = member?.subscriptions || []
                   const lastSub = subs.slice().sort((x, y) => (x.end_date < y.end_date ? 1 : -1))[0]
                   return (
@@ -181,6 +205,7 @@ export default function Verify() {
                           <div className="font-semibold flex items-center gap-2 flex-wrap">
                             {d.name}
                             {!member && <span className="chip chip-info">not on your list</span>}
+                            {matchedByName && <span className="chip chip-warn">matched by name, check it</span>}
                             {d.resolved && <span className="chip chip-mute">done</span>}
                           </div>
                           <div className="text-sm muted">
