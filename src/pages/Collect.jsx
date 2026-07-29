@@ -62,14 +62,18 @@ function PayRow({ member, cars, presets, onSaved }) {
             AED {saved.amount} · {fmt(saved.start_date)} → {fmt(saved.end_date)}
           </div>
         </div>
-        <a
-          href={waLink(member.phone, receiptText(member, saved, carName))}
-          target="_blank"
-          rel="noreferrer"
-          className="btn-primary px-3 py-1.5 text-sm shrink-0"
-        >
-          Send receipt
-        </a>
+        {member.phone ? (
+          <a
+            href={waLink(member.phone, receiptText(member, saved, carName))}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-primary px-3 py-1.5 text-sm shrink-0"
+          >
+            Send receipt
+          </a>
+        ) : (
+          <span className="chip chip-warn shrink-0">no number — no receipt</span>
+        )}
       </div>
     )
   }
@@ -80,7 +84,7 @@ function PayRow({ member, cars, presets, onSaved }) {
         <div className="min-w-0 flex-1">
           <div className="font-semibold truncate">{member.name}</div>
           <div className="text-sm muted truncate">
-            {member.phone}
+            {member.phone || 'no number yet — ask for it'}
             {member.gender ? ` · ${member.gender === 'female' ? 'F' : 'M'}` : ''}
           </div>
         </div>

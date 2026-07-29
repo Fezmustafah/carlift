@@ -138,7 +138,7 @@ export default function Members() {
                   {m.source === 'qr' && <span className="chip chip-info">QR</span>}
                 </div>
                 <div className="text-sm muted truncate">
-                  {m.phone} · {carName(m.car_id)} · {m.shift}
+                  {m.phone || 'no number yet'} · {carName(m.car_id)} · {m.shift}
                   {m.gender ? ` · ${m.gender === 'female' ? 'F' : 'M'}` : ''}
                   {m.pickup_point ? ` · ${m.pickup_point}` : ''}
                 </div>
@@ -147,14 +147,16 @@ export default function Members() {
                 <button onClick={() => setPayFor(m)} className="btn-primary px-3 py-1.5 text-sm flex-1 sm:flex-none">
                   + Payment
                 </button>
-                <a
-                  href={waLink(m.phone, '')}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-ghost px-3 py-1.5 text-sm"
-                >
-                  WhatsApp
-                </a>
+                {m.phone && (
+                  <a
+                    href={waLink(m.phone, '')}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-ghost px-3 py-1.5 text-sm"
+                  >
+                    WhatsApp
+                  </a>
+                )}
                 <button onClick={() => setEditFor(m)} className="btn-ghost px-3 py-1.5 text-sm">
                   Edit
                 </button>

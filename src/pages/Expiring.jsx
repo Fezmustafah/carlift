@@ -13,19 +13,21 @@ function Row({ m, s, onRenew }) {
       <div className="min-w-0 flex-1">
         <div className="font-semibold truncate">{m.name}</div>
         <div className="text-sm muted">
-          {m.phone} · ends {fmt(s.end)} ·{' '}
+          {m.phone || 'no number yet'} · ends {fmt(s.end)} ·{' '}
           <span style={{ color: s.days < 0 ? 'var(--bad)' : s.days <= 1 ? 'var(--warn)' : 'inherit' }}>{when}</span>
         </div>
       </div>
       <div className="flex gap-2 shrink-0 w-full sm:w-auto">
-        <a
-          href={waLink(m.phone, reminderText(m, s.end, s.days))}
-          target="_blank"
-          rel="noreferrer"
-          className="btn-primary px-3 py-1.5 text-sm flex-1 sm:flex-none text-center"
-        >
-          Remind on WhatsApp
-        </a>
+        {m.phone && (
+          <a
+            href={waLink(m.phone, reminderText(m, s.end, s.days))}
+            target="_blank"
+            rel="noreferrer"
+            className="btn-primary px-3 py-1.5 text-sm flex-1 sm:flex-none text-center"
+          >
+            Remind on WhatsApp
+          </a>
+        )}
         <button onClick={() => onRenew(m)} className="btn-ghost px-3 py-1.5 text-sm">
           Renew
         </button>

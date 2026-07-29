@@ -11,7 +11,9 @@ create table cars (
 create table members (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  phone text not null,
+  -- Nullable: riders seeded from the paper register have no number until they
+  -- check in through the link themselves.
+  phone text,
   gender text,                             -- male | female
   area text,
   pickup_point text,
