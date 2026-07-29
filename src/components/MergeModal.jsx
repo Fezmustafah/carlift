@@ -11,11 +11,37 @@ function subsOf(m) {
   return m.subscriptions || []
 }
 
+// Two different riders really can share a name — Aisha and Aisha, Lucy and Luy.
+// Once told they are separate, stop asking.
+const NOT_SAME_KEY = 'carlift.notDuplicates'
+function loadNotSame() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(NOT_SAME_KEY) || '[]'))
+  } catch {
+    return new Set()
+  }
+}
+
 export default function MergeModal({ members, cars, onClose, onSaved }) {
-  const pairs = useMemo(() => findPairs(members), [members])
+  const [notSame, setNotSame] = useState(loadNotSame)
+  const pairs = useMemo(
+    () => findPairs(members).filter((p) => !notSame.has(p.a.id + p.b.id)),
+    [members, notSame]
+  )
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const [merged, setMerged] = useState([])
+
+  function markNotSame(pair) {
+    const next = new Set(notSame)
+    next.add(pair.a.id + pair.b.id)
+    setNotSame(next)
+    try {
+      localStorage.setItem(NOT_SAME_KEY, JSON.stringify([...next]))
+    } catch {
+      /* private mode — worst case it asks again */
+    }
+  }
 
   const carName = (id) => cars.find((c) => c.id === id)?.name || 'no car'
 
@@ -103,9 +129,14 @@ export default function MergeModal({ members, cars, onClose, onSaved }) {
                     ✓ Merged
                   </p>
                 ) : (
-                  <button onClick={() => merge(p)} disabled={busy === id} className="btn-primary px-3 py-1.5 text-sm">
-                    {busy === id ? 'Merging…' : `Merge into ${keep.name}`}
-                  </button>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => merge(p)} disabled={busy === id} className="btn-primary px-3 py-1.5 text-sm">
+                      {busy === id ? 'Merging…' : `Merge into ${keep.name}`}
+                    </button>
+                    <button onClick={() => markNotSame(p)} className="btn-ghost px-3 py-1.5 text-sm">
+                      Not the same person
+                    </button>
+                  </div>
                 )}
               </div>
             )

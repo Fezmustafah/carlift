@@ -135,6 +135,7 @@ export default function PaymentModal({ member, cars, onClose, onSaved }) {
               <label className="label">Paid via</label>
               <select className="input" value={paidVia} onChange={(e) => setPaidVia(e.target.value)}>
                 <option value="cash">Cash to office</option>
+                <option value="card">Card</option>
                 <option value="transfer">Bank transfer</option>
                 <option value="link">Payment link</option>
               </select>
