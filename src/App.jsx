@@ -9,6 +9,10 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Members from './pages/Members'
 import Verify from './pages/Verify'
+import Collect from './pages/Collect'
+import Report from './pages/Report'
+import ShowQr from './pages/ShowQr'
+import More from './pages/More'
 import Expiring from './pages/Expiring'
 import Logs from './pages/Logs'
 import Cards from './pages/Cards'
@@ -70,6 +74,10 @@ export default function App() {
         <Route index path="/" element={<Dashboard />} />
         <Route path="/members" element={<Members />} />
         <Route path="/verify" element={<Verify />} />
+        <Route path="/collect" element={<Collect />} />
+        <Route path="/report" element={<Report />} />
+        <Route path="/qr" element={<ShowQr />} />
+        <Route path="/more" element={<More />} />
         <Route path="/expiring" element={<Expiring />} />
         <Route path="/logs" element={<Logs />} />
         <Route path="/cards" element={<Cards />} />

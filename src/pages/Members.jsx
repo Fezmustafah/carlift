@@ -6,6 +6,7 @@ import { waLink } from '../lib/wa'
 import StateChip from '../components/StateChip'
 import PaymentModal from '../components/PaymentModal'
 import MemberModal from '../components/MemberModal'
+import MergeModal from '../components/MergeModal'
 
 const FILTERS = ['All', 'Pending', 'Active', 'Expired', 'Left']
 
@@ -28,6 +29,7 @@ export default function Members() {
   const [payFor, setPayFor] = useState(null)
   const [editFor, setEditFor] = useState(null)
   const [adding, setAdding] = useState(false)
+  const [merging, setMerging] = useState(false)
   const [loading, setLoading] = useState(true)
 
   async function load() {
@@ -74,9 +76,14 @@ export default function Members() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="h1">Members</h1>
-        <button onClick={() => setAdding(true)} className="btn-primary">
-          + Member
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setMerging(true)} className="btn-ghost">
+            Duplicates
+          </button>
+          <button onClick={() => setAdding(true)} className="btn-primary">
+            + Member
+          </button>
+        </div>
       </div>
 
       <input
@@ -160,6 +167,7 @@ export default function Members() {
         </div>
       )}
 
+      {merging && <MergeModal members={members} cars={cars} onClose={() => setMerging(false)} onSaved={load} />}
       {payFor && <PaymentModal member={payFor} cars={cars} onClose={() => setPayFor(null)} onSaved={load} />}
       {(editFor || adding) && (
         <MemberModal
