@@ -26,17 +26,37 @@ function daysApart(a, b) {
   return Math.abs((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000)
 }
 
-function classify(d, member) {
+// A subscription that runs across the month the rider is talking about.
+function coversMonth(sub, monthKey) {
+  if (!monthKey || !sub.start_date || !sub.end_date) return false
+  return sub.start_date.slice(0, 7) <= monthKey && monthKey <= sub.end_date.slice(0, 7)
+}
+
+// Old check-ins asked when the payment was made; the short form does not, so
+// those rows are matched by the month they are about instead.
+function hasRecordFor(member, d, monthKey) {
   const subs = member?.subscriptions || []
-  const matched = subs.some(
-    (s) =>
-      daysApart(s.start_date, d.paid_when) <= NEAR_DAYS ||
-      daysApart((s.created_at || '').slice(0, 10), d.paid_when) <= NEAR_DAYS ||
-      (d.paid_when && s.start_date <= d.paid_when && d.paid_when <= s.end_date)
-  )
+  if (d.paid_when && monthKey === d.for_month) {
+    return subs.some(
+      (s) =>
+        daysApart(s.start_date, d.paid_when) <= NEAR_DAYS ||
+        daysApart((s.created_at || '').slice(0, 10), d.paid_when) <= NEAR_DAYS ||
+        (s.start_date <= d.paid_when && d.paid_when <= s.end_date)
+    )
+  }
+  return subs.some((s) => coversMonth(s, monthKey))
+}
+
+// "no" for last month with nothing on record = money still to collect today,
+// even from a rider who is straight for this month.
+function owesPrev(d, member) {
+  return d.paid_prev === 'no' && !hasRecordFor(member, d, d.prev_month)
+}
+
+function classify(d, member) {
   if (d.paid === 'yes' && d.paid_to === 'driver') return 'driver'
-  if (d.paid === 'yes' && !matched) return 'ghost'
-  if (d.paid === 'yes') return 'match'
+  if (d.paid === 'yes' && !hasRecordFor(member, d, d.for_month)) return 'ghost'
+  if (d.paid === 'yes') return owesPrev(d, member) ? 'owes_prev' : 'match'
   return 'unpaid'
 }
 
@@ -56,7 +76,13 @@ const BUCKETS = [
   {
     key: 'unpaid',
     title: 'Not paid yet',
-    blurb: 'Collect from these between 5 and 10 August.',
+    blurb: 'Collect from these on the round.',
+    color: 'var(--warn)',
+  },
+  {
+    key: 'owes_prev',
+    title: 'Paid this month — last month still open',
+    blurb: 'This month is settled, the month before it is not. Collect the old one too.',
     color: 'var(--warn)',
   },
   {
@@ -203,6 +229,8 @@ export default function Verify() {
       'driver',
       'for_month',
       'paid',
+      'prev_month',
+      'paid_prev',
       'paid_to',
       'paid_when',
       'amount',
@@ -222,6 +250,8 @@ export default function Verify() {
         car?.driver_name,
         d.for_month,
         d.paid,
+        d.prev_month,
+        d.paid_prev,
         d.paid_to,
         d.paid_when,
         d.amount,
@@ -299,12 +329,22 @@ export default function Verify() {
               <div className="text-sm muted">Check-ins received</div>
               <div className="text-2xl font-bold">{decls.length}</div>
             </div>
-            <div className="card">
-              <div className="text-sm muted">Claimed paid to drivers</div>
-              <div className="text-2xl font-bold" style={{ color: 'var(--bad)' }}>
-                AED {leak.toLocaleString()}
+            {/* Only the old long form asked who the money went to. */}
+            {rows.some((r) => r.bucket === 'driver') && (
+              <div className="card">
+                <div className="text-sm muted">Claimed paid to drivers</div>
+                <div className="text-2xl font-bold" style={{ color: 'var(--bad)' }}>
+                  AED {leak.toLocaleString()}
+                </div>
+                <div className="text-xs dim">{rows.filter((r) => r.bucket === 'driver').length} riders</div>
               </div>
-              <div className="text-xs dim">{rows.filter((r) => r.bucket === 'driver').length} riders</div>
+            )}
+            <div className="card">
+              <div className="text-sm muted">Owe last month</div>
+              <div className="text-2xl font-bold" style={{ color: 'var(--warn)' }}>
+                {rows.filter((r) => owesPrev(r.d, r.member)).length}
+              </div>
+              <div className="text-xs dim">said no, nothing on record</div>
             </div>
             <div className="card">
               <div className="text-sm muted">Claimed paid, no record</div>
@@ -357,6 +397,9 @@ export default function Verify() {
                         <div className="min-w-0">
                           <div className="font-semibold flex items-center gap-2 flex-wrap">
                             {d.name}
+                            {owesPrev(d, member) && (
+                              <span className="chip chip-warn">owes {monthName(d.prev_month) || 'last month'}</span>
+                            )}
                             {!member && <span className="chip chip-info">not on your list</span>}
                             {matchedByName && <span className="chip chip-warn">matched by name, check it</span>}
                             {d.resolved && <span className="chip chip-mute">done</span>}
@@ -374,12 +417,27 @@ export default function Verify() {
                       <div className="grid sm:grid-cols-2 gap-2 text-sm">
                         <div className="sunken p-3">
                           <div className="text-xs dim mb-0.5">Rider says</div>
-                          {d.paid === 'yes' ? (
-                            <>
-                              Paid {d.amount ? `AED ${Number(d.amount).toLocaleString()}` : '(amount not given)'} on{' '}
-                              {fmt(d.paid_when)}
-                              <br />
-                              to{' '}
+                          <div>
+                            <b>{monthName(d.for_month) || 'This month'}:</b>{' '}
+                            {d.paid === 'yes' ? 'paid' : d.paid === 'no' ? 'not paid yet' : 'not sure'}
+                          </div>
+                          {d.prev_month && (
+                            <div>
+                              <b>{monthName(d.prev_month)}:</b>{' '}
+                              {d.paid_prev === 'yes'
+                                ? 'paid'
+                                : d.paid_prev === 'no'
+                                  ? 'not paid'
+                                  : d.paid_prev === 'na'
+                                    ? 'was not riding'
+                                    : 'not sure'}
+                            </div>
+                          )}
+                          {/* Older check-ins asked for the detail; the short form does not. */}
+                          {d.paid === 'yes' && d.paid_to && (
+                            <div className="mt-1">
+                              {d.amount ? `AED ${Number(d.amount).toLocaleString()}` : 'Amount not given'} on{' '}
+                              {fmt(d.paid_when)} to{' '}
                               <b>
                                 {d.paid_to === 'driver'
                                   ? `the driver${car ? ` — ${car.driver_name}` : ''}`
@@ -387,13 +445,9 @@ export default function Verify() {
                                     ? 'the office (cash)'
                                     : d.paid_to === 'transfer'
                                       ? 'bank transfer'
-                                      : 'not sure'}
+                                      : 'not sure who'}
                               </b>
-                            </>
-                          ) : d.paid === 'no' ? (
-                            'Has not paid yet'
-                          ) : (
-                            'Not sure whether they paid'
+                            </div>
                           )}
                         </div>
                         <div className="sunken p-3">

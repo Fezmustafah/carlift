@@ -1,6 +1,14 @@
 -- Carlift — import the July 2026 paper register
 -- 88 riders, AED 22,215. Ramesh is NOT here: no amount was written next to him.
 --
+-- SUPERSEDED 2026-07-29 — DO NOT RUN.
+--   These riders come in without phone numbers, and the register's spellings do
+--   not match how riders write their own names, so the roster filled with
+--   duplicates. supabase/2026-08-01-purge-no-phone.sql removes them again and
+--   blocks phone-less members from then on. Riders are being registered in
+--   person from 5 August instead. Kept only as the undo for that purge, and as
+--   the record of what July said.
+--
 -- READ THIS FIRST, IT TOUCHES MONEY:
 --   * Check register/july-2026-register.csv before running — it lists every
 --     name I was unsure of.

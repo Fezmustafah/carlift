@@ -29,15 +29,27 @@ const TL_MONTHS = [
   'Hulyo', 'Agosto', 'Setyembre', 'Oktubre', 'Nobyembre', 'Disyembre',
 ]
 
-// Riders were answering "have you paid?" about whichever month they had in mind.
-// Naming the running month removes the guess.
-export function currentMonth() {
-  const d = new Date()
+function describeMonth(d) {
   return {
-    key: todayISO().slice(0, 7),                                     // 2026-07
+    key: d.toLocaleDateString('en-CA').slice(0, 7),                  // 2026-07
     en: d.toLocaleDateString('en-GB', { month: 'long' }),            // July
     tl: TL_MONTHS[d.getMonth()],                                     // Hulyo
   }
+}
+
+// Riders were answering "have you paid?" about whichever month they had in mind.
+// Naming the running month removes the guess.
+export function currentMonth() {
+  return describeMonth(new Date())
+}
+
+// The collection round on the 5th asks about last month too, so a rider who
+// slipped through the previous round is caught on this one.
+export function prevMonth() {
+  const d = new Date()
+  d.setDate(1)                 // before rolling back, so 31 Mar → 1 Feb never happens
+  d.setMonth(d.getMonth() - 1)
+  return describeMonth(d)
 }
 
 export function monthStartISO() {

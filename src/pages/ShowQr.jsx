@@ -8,6 +8,9 @@ import { supabase } from '../lib/supabase'
 export default function ShowQr() {
   const [cars, setCars] = useState([])
   const [carId, setCarId] = useState('')
+  // The monthly round is the normal use, and it adds unknown riders to the
+  // roster by itself, so it is the default.
+  const [target, setTarget] = useState('/checkin')
 
   useEffect(() => {
     supabase
@@ -17,7 +20,7 @@ export default function ShowQr() {
       .then(({ data }) => setCars(data || []))
   }, [])
 
-  const url = `${window.location.origin}/join${carId ? `?car=${carId}` : ''}`
+  const url = `${window.location.origin}${target}${carId ? `?car=${carId}` : ''}`
 
   return (
     <div className="space-y-4">
@@ -33,8 +36,21 @@ export default function ShowQr() {
         </select>
       </div>
 
+      <div className="no-print flex gap-2 flex-wrap">
+        <button onClick={() => setTarget('/checkin')} className={`pill ${target === '/checkin' ? 'pill-on' : ''}`}>
+          Monthly check-in
+        </button>
+        <button onClick={() => setTarget('/register')} className={`pill ${target === '/register' ? 'pill-on' : ''}`}>
+          New rider
+        </button>
+        <button onClick={() => setTarget('/join')} className={`pill ${target === '/join' ? 'pill-on' : ''}`}>
+          Let them choose
+        </button>
+      </div>
+
       <p className="no-print text-sm muted">
         Hold this up for the rider to scan. Pick the car first and it is already chosen for them.
+        {target === '/checkin' && ' Four questions: name, number, last month, this month.'}
       </p>
 
       <div className="card text-center space-y-4 py-6">

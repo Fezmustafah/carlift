@@ -29,9 +29,17 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
     if (busy) return
     setBusy(true)
     setErr('')
+    // The database refuses a member without a real number — say so in words
+    // rather than letting a constraint error through.
+    const phone = normalizePhone(form.phone)
+    if (phone.length < 9) {
+      setErr('A WhatsApp number is required — 05x xxx xxxx. No number, no member.')
+      setBusy(false)
+      return
+    }
     const row = {
       ...form,
-      phone: normalizePhone(form.phone),
+      phone,
       area: form.area || null,
       pickup_point: form.pickup_point || null,
       car_id: form.car_id || null,

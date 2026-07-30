@@ -1,18 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, hasSupabase } from '../lib/supabase'
 import { normalizePhone, waLink } from '../lib/wa'
-import { todayISO, addDays, fmt, currentMonth } from '../lib/dates'
+import { currentMonth, prevMonth } from '../lib/dates'
 import Choice from '../components/Choice'
 import BankDetails from '../components/BankDetails'
 
-// Existing riders only. Newcomers use /register.
-// Kept deliberately short — every extra question loses answers. Shift and plan
-// are not asked here; the office confirms those in person during collection.
-
-const GENDERS = [
-  { v: 'male', en: 'Male', tl: 'Lalaki' },
-  { v: 'female', en: 'Female', tl: 'Babae' },
-]
+// The 5th-of-the-month collection round. Four questions, nothing else:
+// name, number, did you pay last month, did you pay this month.
+// Every extra question costs seconds per rider with a queue waiting and a
+// driver ready to leave, so car comes from the ?car= in the QR link and the
+// office fills in the rest from its own records.
 
 const phoneOk = (p) => normalizePhone(p).length >= 11
 
@@ -29,30 +26,16 @@ function loadDraft() {
   }
 }
 
+const BLANK = { name: '', phone: '', paid_prev: '', paid: '' }
+
 export default function Checkin() {
   const month = useMemo(currentMonth, [])
-  const [cars, setCars] = useState([])
+  const last = useMemo(prevMonth, [])
   const preCarId = useMemo(() => new URLSearchParams(window.location.search).get('car') || '', [])
   const draft = useMemo(loadDraft, [])
 
-  const PAID = [
-    { v: 'yes', en: `Yes, I paid for ${month.en}`, tl: `Oo, bayad na po ako para sa ${month.tl}` },
-    { v: 'no', en: `Not yet for ${month.en}`, tl: `Hindi pa po para sa ${month.tl}` },
-    { v: 'unsure', en: "I'm not sure", tl: 'Hindi po ako sigurado' },
-  ]
-
-  const [a, setA] = useState(() => ({
-    name: '',
-    phone: '',
-    gender: '',
-    car_id: preCarId,
-    paid: '',
-    paid_to: '',
-    paid_when: todayISO(),
-    amount: '',
-    ...(draft?.a || {}),
-    ...(preCarId ? { car_id: preCarId } : {}),
-  }))
+  const [carId, setCarId] = useState(preCarId)
+  const [a, setA] = useState(() => ({ ...BLANK, ...(draft?.a || {}) }))
   const [step, setStep] = useState(draft?.step || 0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -60,18 +43,16 @@ export default function Checkin() {
   const office = import.meta.env.VITE_OFFICE_WHATSAPP
   const community = import.meta.env.VITE_COMMUNITY_LINK
 
+  // A stale ?car= (a card printed before a car was replaced) must not go into
+  // the row, so the id is only kept if it still exists.
   useEffect(() => {
-    if (!supabase) return
+    if (!supabase || !preCarId) return
     supabase
       .from('cars')
-      .select('id, name, driver_name')
-      .order('name')
-      .then(({ data }) => {
-        const list = data || []
-        setCars(list)
-        setA((s) => (s.car_id && !list.some((c) => c.id === s.car_id) ? { ...s, car_id: '' } : s))
-      })
-  }, [])
+      .select('id')
+      .eq('id', preCarId)
+      .then(({ data }) => setCarId(data?.length ? preCarId : ''))
+  }, [preCarId])
 
   useEffect(() => {
     if (done) return
@@ -83,68 +64,52 @@ export default function Checkin() {
   }, [a, step, done])
 
   const set = (k, v) => setA((s) => ({ ...s, [k]: v }))
-  const car = cars.find((c) => c.id === a.car_id)
-  const driver = car?.driver_name
 
-  const steps = useMemo(() => {
-    const s = [
-      { key: 'name', type: 'text', q: 'What is your name?', tl: 'Ano ang pangalan mo?', ph: 'Full name', required: true },
+  const steps = useMemo(
+    () => [
+      {
+        key: 'name',
+        type: 'text',
+        q: 'What is your full name?',
+        tl: 'Ano po ang buong pangalan niyo?',
+        ph: 'Full name',
+        required: true,
+      },
       {
         key: 'phone',
         type: 'tel',
         q: 'Your WhatsApp number',
-        tl: 'Ang WhatsApp number mo (05…)',
+        tl: 'Ang WhatsApp number niyo (05…)',
         ph: '05x xxx xxxx',
         required: true,
         valid: phoneOk,
-        hint: 'We match your payment record with this number. / Dito namin ihahanap ang record mo.',
+        hint: 'Your record and your receipt go to this number. / Dito ipapadala ang resibo niyo.',
       },
-      { key: 'gender', type: 'choice', q: 'Male or female?', tl: 'Lalaki o babae?', options: GENDERS },
-    ]
-    if (cars.length) {
-      s.push({
-        key: 'car_id',
+      {
+        key: 'paid_prev',
         type: 'choice',
-        q: 'Which car do you ride?',
-        tl: 'Aling sasakyan ang sinasakyan mo?',
-        options: cars.map((c) => ({ v: c.id, en: c.name, tl: `Driver: ${c.driver_name}` })),
-      })
-    }
-    s.push({
-      key: 'paid',
-      type: 'choice',
-      q: `Have you paid for ${month.en}?`,
-      tl: `Bayad na po ba kayo para sa buwan ng ${month.tl}?`,
-      options: PAID,
-      hint: `This month only — ${month.en}. Not the next month.`,
-    })
-    if (a.paid === 'yes') {
-      s.push({
-        key: 'paid_to',
-        type: 'choice',
-        q: 'Who did you give the money to?',
-        tl: 'Kanino mo po ibinigay ang bayad?',
+        q: `Did you pay for ${last.en}?`,
+        tl: `Nakabayad na po ba kayo para sa ${last.tl}?`,
         options: [
-          { v: 'driver', en: driver ? `The driver (${driver})` : 'The driver', tl: 'Sa driver' },
-          { v: 'office', en: 'The office — cash', tl: 'Sa opisina — cash' },
-          { v: 'transfer', en: 'Bank transfer to the office', tl: 'Bank transfer sa opisina' },
-          { v: 'unsure', en: "I don't remember", tl: 'Hindi ko na po maalala' },
+          { v: 'yes', en: `Yes, I paid for ${last.en}`, tl: `Oo, bayad na po` },
+          { v: 'no', en: `No, still not paid`, tl: `Hindi pa po` },
+          { v: 'na', en: `I was not riding in ${last.en}`, tl: `Hindi pa po ako sumasakay noon` },
         ],
-      })
-      s.push({ key: 'paid_when', type: 'when', q: 'When did you pay?', tl: 'Kailan po kayo nagbayad?' })
-      s.push({
-        key: 'amount',
-        type: 'number',
-        q: 'How much did you pay? (AED)',
-        tl: 'Magkano po ang binayad niyo? (AED)',
-        ph: 'e.g. 400',
-        skippable: true,
-      })
-    }
-    s.push({ key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma po' })
-    return s
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cars, a.paid, driver, month.en, month.tl])
+      },
+      {
+        key: 'paid',
+        type: 'choice',
+        q: `And for ${month.en}?`,
+        tl: `At para sa ${month.tl}?`,
+        options: [
+          { v: 'yes', en: `Yes, paid for ${month.en}`, tl: `Oo, bayad na po` },
+          { v: 'no', en: `Not yet`, tl: `Hindi pa po` },
+        ],
+      },
+      { key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma po' },
+    ],
+    [month.en, month.tl, last.en, last.tl]
+  )
 
   const total = steps.length
   const idx = Math.min(step, total - 1)
@@ -158,22 +123,30 @@ export default function Checkin() {
     }
   }
 
+  // Handing the phone to the next rider must never show the last one's answers.
+  function nextRider() {
+    clearDraft()
+    setA({ ...BLANK })
+    setStep(0)
+    setErr('')
+    setDone(false)
+  }
+
   async function submit() {
     if (!hasSupabase || busy) return
     setBusy(true)
     setErr('')
     const phone = normalizePhone(a.phone)
+    const name = a.name.trim()
 
     const { error } = await supabase.from('declarations').insert({
-      name: a.name.trim(),
+      name,
       phone,
-      gender: a.gender || null,
-      car_id: a.car_id || null,
-      paid: a.paid,
+      car_id: carId || null,
+      paid: a.paid || 'unsure',
       for_month: month.key,
-      paid_to: a.paid === 'yes' ? a.paid_to || 'unsure' : null,
-      paid_when: a.paid === 'yes' ? a.paid_when : null,
-      amount: a.paid === 'yes' && a.amount ? Number(a.amount) : null,
+      paid_prev: a.paid_prev || 'unsure',
+      prev_month: last.key,
     })
 
     if (error) {
@@ -186,16 +159,15 @@ export default function Checkin() {
       return
     }
 
-    // Riders who were never on the roster get added, so the check-in also
-    // builds the list. A duplicate phone (23505) just means we already knew them.
+    // Riders who were never on the roster get added, so the round also builds
+    // the list. A duplicate phone (23505) just means we already knew them.
     await supabase.from('members').insert({
-      name: a.name.trim(),
+      name,
       phone,
-      gender: a.gender || null,
-      car_id: a.car_id || null,
+      car_id: carId || null,
       status: 'pending',
       source: 'checkin',
-      notes: 'From payment check-in — shift and plan not asked',
+      notes: `Collection round ${month.key}`,
     })
 
     clearDraft()
@@ -218,7 +190,7 @@ export default function Checkin() {
   }
 
   if (done) {
-    const owes = a.paid !== 'yes'
+    const owes = a.paid !== 'yes' || a.paid_prev === 'no'
     return (
       <div className="min-h-screen grid place-items-center p-4">
         <div className="card max-w-md w-full text-center space-y-3 p-6 pop-in">
@@ -241,13 +213,17 @@ export default function Checkin() {
 
           {owes && <BankDetails />}
 
+          <button type="button" onClick={nextRider} className="btn-primary btn-lg block w-full">
+            ➕ Next rider / Susunod na pasahero
+          </button>
+
           {community && (
-            <a href={community} target="_blank" rel="noreferrer" className="btn-primary btn-lg block">
+            <a href={community} target="_blank" rel="noreferrer" className="btn-ghost block">
               💬 Join the Car Lift group
             </a>
           )}
           {office && (
-            <a href={waLink(office, 'Hi, I just sent my car lift payment details.')} className="btn-ghost block">
+            <a href={waLink(office, 'Hi, I just did my car lift check-in.')} className="btn-ghost block">
               Message the office / I-message ang opisina
             </a>
           )}
@@ -258,6 +234,8 @@ export default function Checkin() {
       </div>
     )
   }
+
+  const answerLabel = (v, m) => (v === 'yes' ? 'Paid' : v === 'no' ? 'Not paid' : `Not riding in ${m}`)
 
   return (
     <div className="min-h-screen flex flex-col p-4">
@@ -286,12 +264,12 @@ export default function Checkin() {
 
           {cur.type === 'choice' && <Choice options={cur.options} value={a[cur.key]} onPick={onPick} />}
 
-          {(cur.type === 'text' || cur.type === 'tel' || cur.type === 'number') && (
+          {(cur.type === 'text' || cur.type === 'tel') && (
             <input
               className="input input-lg"
-              type={cur.type === 'text' ? 'text' : cur.type === 'tel' ? 'tel' : 'number'}
-              inputMode={cur.type === 'text' ? 'text' : cur.type === 'tel' ? 'tel' : 'decimal'}
-              autoComplete={cur.type === 'tel' ? 'tel' : cur.key === 'name' ? 'name' : 'off'}
+              type={cur.type === 'text' ? 'text' : 'tel'}
+              inputMode={cur.type === 'text' ? 'text' : 'tel'}
+              autoComplete={cur.type === 'tel' ? 'tel' : 'name'}
               autoCapitalize={cur.key === 'name' ? 'words' : 'sentences'}
               placeholder={cur.ph}
               value={a[cur.key]}
@@ -299,30 +277,6 @@ export default function Checkin() {
               onChange={(e) => set(cur.key, e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onNext()}
             />
-          )}
-
-          {cur.type === 'when' && (
-            <div className="space-y-2.5">
-              <Choice
-                options={[
-                  { v: todayISO(), en: `Today · ${fmt(todayISO())}`, tl: 'Ngayon' },
-                  { v: addDays(todayISO(), -7), en: 'About a week ago', tl: 'Mga isang linggo na' },
-                  { v: addDays(todayISO(), -30), en: 'About a month ago', tl: 'Mga isang buwan na' },
-                ]}
-                value={a.paid_when}
-                onPick={onPick}
-              />
-              <div className="pt-1">
-                <label className="label">Or pick the date / O pumili ng petsa</label>
-                <input
-                  className="input"
-                  type="date"
-                  max={todayISO()}
-                  value={a.paid_when}
-                  onChange={(e) => set('paid_when', e.target.value)}
-                />
-              </div>
-            </div>
           )}
 
           {cur.type === 'confirm' && (
@@ -336,42 +290,14 @@ export default function Checkin() {
                   <span className="muted">WhatsApp</span>
                   <b>{a.phone}</b>
                 </div>
-                {car && (
-                  <div className="flex justify-between gap-3">
-                    <span className="muted">Car</span>
-                    <b className="truncate">{car.name}</b>
-                  </div>
-                )}
                 <div className="flex justify-between gap-3">
-                  <span className="muted">Paid for {month.en}?</span>
-                  <b>{a.paid === 'yes' ? 'Yes' : a.paid === 'no' ? 'Not yet' : 'Not sure'}</b>
+                  <span className="muted">{last.en}</span>
+                  <b>{answerLabel(a.paid_prev, last.en)}</b>
                 </div>
-                {a.paid === 'yes' && (
-                  <>
-                    <div className="flex justify-between gap-3">
-                      <span className="muted">Paid to</span>
-                      <b className="truncate">
-                        {a.paid_to === 'driver'
-                          ? driver
-                            ? `Driver (${driver})`
-                            : 'Driver'
-                          : a.paid_to === 'office'
-                            ? 'Office — cash'
-                            : a.paid_to === 'transfer'
-                              ? 'Bank transfer'
-                              : "Don't remember"}
-                      </b>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="muted">When</span>
-                      <b>{fmt(a.paid_when)}</b>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <span className="muted">Amount</span>
-                      <b>{a.amount ? `AED ${a.amount}` : 'Not given'}</b>
-                    </div>
-                  </>
-                )}
+                <div className="flex justify-between gap-3">
+                  <span className="muted">{month.en}</span>
+                  <b>{answerLabel(a.paid, month.en)}</b>
+                </div>
               </div>
               <p className="text-sm muted text-center">
                 Please answer honestly — the office is checking every record.
@@ -402,33 +328,8 @@ export default function Checkin() {
               ← Back
             </button>
           )}
-          {cur.skippable && (
-            <button
-              type="button"
-              onClick={() => {
-                set(cur.key, '')
-                setErr('')
-                setStep((s) => s + 1)
-              }}
-              className="btn-ghost px-4"
-            >
-              Skip
-            </button>
-          )}
-          {(cur.type === 'text' || cur.type === 'tel' || cur.type === 'number') && (
+          {(cur.type === 'text' || cur.type === 'tel') && (
             <button type="button" onClick={onNext} className="btn-primary btn-lg flex-1">
-              Next / Susunod
-            </button>
-          )}
-          {cur.type === 'when' && (
-            <button
-              type="button"
-              onClick={() => {
-                setErr('')
-                setStep((s) => s + 1)
-              }}
-              className="btn-primary btn-lg flex-1"
-            >
               Next / Susunod
             </button>
           )}

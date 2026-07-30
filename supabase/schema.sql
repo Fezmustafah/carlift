@@ -11,9 +11,10 @@ create table cars (
 create table members (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  -- Nullable: riders seeded from the paper register have no number until they
-  -- check in through the link themselves.
-  phone text,
+  -- A rider without a WhatsApp number cannot be contacted, reminded or matched
+  -- to their own check-in, so the roster does not carry them. Enforced here and
+  -- in every form that creates a member.
+  phone text not null check (length(btrim(phone)) >= 9),
   gender text,                             -- male | female
   area text,
   pickup_point text,
