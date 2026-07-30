@@ -26,7 +26,7 @@ function loadDraft() {
   }
 }
 
-const BLANK = { name: '', phone: '', paid_prev: '', paid: '' }
+const BLANK = { name: '', phone: '', paid_prev: '', paid_prev_to: '', paid: '' }
 
 export default function Checkin() {
   const month = useMemo(currentMonth, [])
@@ -65,8 +65,8 @@ export default function Checkin() {
 
   const set = (k, v) => setA((s) => ({ ...s, [k]: v }))
 
-  const steps = useMemo(
-    () => [
+  const steps = useMemo(() => {
+    const s = [
       {
         key: 'name',
         type: 'text',
@@ -96,20 +96,39 @@ export default function Checkin() {
           { v: 'na', en: `I was not riding in ${last.en}`, tl: `Hindi pa po ako sumasakay noon` },
         ],
       },
-      {
-        key: 'paid',
+    ]
+
+    // Only for riders who did pay: where the money went. This is the whole
+    // leak in one tap — money handed to a driver never reached the office.
+    // Nobody is blamed for it, so the wording asks, it does not accuse.
+    if (a.paid_prev === 'yes') {
+      s.push({
+        key: 'paid_prev_to',
         type: 'choice',
-        q: `And for ${month.en}?`,
-        tl: `At para sa ${month.tl}?`,
+        q: `Who did you give the ${last.en} money to?`,
+        tl: `Kanino po ninyo ibinigay ang bayad ng ${last.tl}?`,
         options: [
-          { v: 'yes', en: `Yes, paid for ${month.en}`, tl: `Oo, bayad na po` },
-          { v: 'no', en: `Not yet`, tl: `Hindi pa po` },
+          { v: 'driver', en: 'To the driver', tl: 'Sa driver' },
+          { v: 'office', en: 'To the office — cash or bank transfer', tl: 'Sa opisina — cash o bank transfer' },
+          { v: 'unsure', en: "I don't remember", tl: 'Hindi ko na po maalala' },
         ],
-      },
-      { key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma po' },
-    ],
-    [month.en, month.tl, last.en, last.tl]
-  )
+        hint: 'Nobody is in trouble for this. We only need to know where the money went.',
+      })
+    }
+
+    s.push({
+      key: 'paid',
+      type: 'choice',
+      q: `And for ${month.en}?`,
+      tl: `At para sa ${month.tl}?`,
+      options: [
+        { v: 'yes', en: `Yes, paid for ${month.en}`, tl: `Oo, bayad na po` },
+        { v: 'no', en: `Not yet`, tl: `Hindi pa po` },
+      ],
+    })
+    s.push({ key: 'confirm', type: 'confirm', q: 'Please confirm', tl: 'Pakikumpirma po' })
+    return s
+  }, [month.en, month.tl, last.en, last.tl, a.paid_prev])
 
   const total = steps.length
   const idx = Math.min(step, total - 1)
@@ -146,6 +165,7 @@ export default function Checkin() {
       paid: a.paid || 'unsure',
       for_month: month.key,
       paid_prev: a.paid_prev || 'unsure',
+      paid_prev_to: a.paid_prev === 'yes' ? a.paid_prev_to || 'unsure' : null,
       prev_month: last.key,
     })
 
@@ -191,6 +211,7 @@ export default function Checkin() {
 
   if (done) {
     const owes = a.paid !== 'yes' || a.paid_prev === 'no'
+    const paidDriver = a.paid_prev === 'yes' && a.paid_prev_to === 'driver'
     return (
       <div className="min-h-screen grid place-items-center p-4">
         <div className="card max-w-md w-full text-center space-y-3 p-6 pop-in">
@@ -201,6 +222,25 @@ export default function Checkin() {
             <br />
             <span className="dim">Nasa opisina na po ang sagot niyo. Ime-message po namin kayo sa WhatsApp.</span>
           </p>
+
+          {/* Said out loud to the one rider it applies to, once, without blame —
+              this is the habit that has to stop, and it stops by being told. */}
+          {paidDriver && (
+            <div
+              className="rounded-2xl p-3 text-sm text-left space-y-1.5"
+              style={{ border: '2px solid var(--warn)', background: 'var(--warn-soft)', color: 'var(--warn)' }}
+            >
+              <div className="font-bold">You paid the driver for {last.en}.</div>
+              <div>
+                That is fine — it is counted this one time. <b>It was the last time.</b> From now on pay the office
+                only: the office person comes on the 5th of every month, or send a bank transfer.
+              </div>
+              <div className="dim">
+                Ayos lang po ngayon — bibilangin namin ito. Pero ito na po ang huli. Sa susunod, sa opisina lamang —
+                dumadating po siya tuwing ika-5 ng buwan, o bank transfer.
+              </div>
+            </div>
+          )}
 
           <div
             className="rounded-2xl p-3 text-sm"
@@ -262,6 +302,21 @@ export default function Checkin() {
           <h1 className="text-3xl font-bold">{cur.q}</h1>
           <p className="muted mt-1 mb-6 text-lg">{cur.tl}</p>
 
+          {/* The rule for THIS month, in front of the rider at the moment they
+              are answering about this month. */}
+          {(cur.key === 'paid' || cur.type === 'confirm') && (
+            <div
+              className="rounded-2xl p-3 text-sm mb-4"
+              style={{ border: '2px solid var(--warn)', background: 'var(--warn-soft)', color: 'var(--warn)' }}
+            >
+              ⚠️ Do not pay the driver for {month.en}. Office only — the office person on the 5th, or bank transfer.
+              <br />
+              <span className="dim">
+                Huwag po kayong magbayad sa driver ngayong {month.tl}. Sa opisina lamang po.
+              </span>
+            </div>
+          )}
+
           {cur.type === 'choice' && <Choice options={cur.options} value={a[cur.key]} onPick={onPick} />}
 
           {(cur.type === 'text' || cur.type === 'tel') && (
@@ -294,6 +349,18 @@ export default function Checkin() {
                   <span className="muted">{last.en}</span>
                   <b>{answerLabel(a.paid_prev, last.en)}</b>
                 </div>
+                {a.paid_prev === 'yes' && (
+                  <div className="flex justify-between gap-3">
+                    <span className="muted">Given to</span>
+                    <b>
+                      {a.paid_prev_to === 'driver'
+                        ? 'The driver'
+                        : a.paid_prev_to === 'office'
+                          ? 'The office'
+                          : "Doesn't remember"}
+                    </b>
+                  </div>
+                )}
                 <div className="flex justify-between gap-3">
                   <span className="muted">{month.en}</span>
                   <b>{answerLabel(a.paid, month.en)}</b>

@@ -82,20 +82,29 @@ export function driverClaimMessage({ driverName, items, dateLabel }) {
 export function declarationText(d, driverName) {
   const amount = d.amount ? `AED ${Number(d.amount)}` : 'your payment'
   const month = monthName(d.for_month)
-  if (d.paid === 'yes' && d.paid_to === 'driver') {
+  const prev = monthName(d.prev_month)
+  // The short form asks neither amount nor date, so both are optional here.
+  const when = d.paid_when ? ` on ${d.paid_when}` : ''
+
+  // Money handed to a driver. Counted once, forgiven once, and the rule for
+  // next month said plainly — a rider who is scolded simply stops answering.
+  if (d.paid_prev_to === 'driver' || (d.paid === 'yes' && d.paid_to === 'driver')) {
+    const which = d.paid_prev_to === 'driver' ? prev : month
     return [
       '🚐 Car Lift — payment check',
       `${d.name}, thank you for answering.`,
-      `You said you paid ${amount} to ${driverName || 'the driver'} on ${d.paid_when}${month ? ` for ${month}` : ''}.`,
-      'We are checking this against our records. If you have a photo or any detail of that payment, please send it here.',
+      `You said you gave ${amount}${when} to ${driverName || 'the driver'}${which ? ` for ${which}` : ''}.`,
+      'You are not in trouble. We are only matching it against our records — if you have a photo or any detail of that payment, please send it here.',
       '',
-      'From 5–10 August, please pay the office only. Payment to a driver is not counted.',
+      'That was the last time. From now on, pay the office only: the office person comes on the 5th of every month, or send a bank transfer. Payment to a driver is not counted.',
+      '',
+      'Tagalog: Ayos lang po, hindi po kayo napagalitan. Pero sa susunod, sa opisina lamang — tuwing ika-5 ng buwan, o bank transfer.',
     ].join('\n')
   }
   if (d.paid === 'yes') {
     return [
       '🚐 Car Lift — payment check',
-      `${d.name}, you said you paid ${amount} on ${d.paid_when}${month ? ` for ${month}` : ''}, but we cannot find it in our records.`,
+      `${d.name}, you said you paid ${amount}${when}${month ? ` for ${month}` : ''}, but we cannot find it in our records.`,
       'Please send the screenshot, or tell us how you paid, so we can update your seat.',
     ].join('\n')
   }
@@ -105,12 +114,12 @@ export function declarationText(d, driverName) {
     `${d.name}, thank you for answering.`,
     `Your payment${month ? ` for ${month}` : ''} is still not received.`,
     '',
-    'Collection is 5–10 August, to the office only.',
+    'The office person comes on the 5th of every month. You can also send a bank transfer.',
     'Payment to a driver is not counted.',
     '',
     ...bankLines(),
     '',
-    'Tagalog: Hindi pa po natatanggap ang bayad niyo. Sa opisina lamang po, Agosto 5–10. Pagkatapos magbayad, ipadala po ang screenshot.',
+    'Tagalog: Hindi pa po natatanggap ang bayad niyo. Sa opisina lamang po — tuwing ika-5 ng buwan. Pagkatapos magbayad, ipadala po ang screenshot.',
   ].join('\n')
 }
 

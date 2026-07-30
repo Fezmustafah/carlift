@@ -54,7 +54,10 @@ function owesPrev(d, member) {
 }
 
 function classify(d, member) {
-  if (d.paid === 'yes' && d.paid_to === 'driver') return 'driver'
+  // The short form asks who last month's money went to; the old long form
+  // asked about the declared month. Either answer means the same thing: the
+  // cash stopped at the driver.
+  if (d.paid_prev_to === 'driver' || (d.paid === 'yes' && d.paid_to === 'driver')) return 'driver'
   if (d.paid === 'yes' && !hasRecordFor(member, d, d.for_month)) return 'ghost'
   if (d.paid === 'yes') return owesPrev(d, member) ? 'owes_prev' : 'match'
   return 'unpaid'
@@ -231,6 +234,7 @@ export default function Verify() {
       'paid',
       'prev_month',
       'paid_prev',
+      'paid_prev_to',
       'paid_to',
       'paid_when',
       'amount',
@@ -252,6 +256,7 @@ export default function Verify() {
         d.paid,
         d.prev_month,
         d.paid_prev,
+        d.paid_prev_to,
         d.paid_to,
         d.paid_when,
         d.amount,
@@ -329,16 +334,17 @@ export default function Verify() {
               <div className="text-sm muted">Check-ins received</div>
               <div className="text-2xl font-bold">{decls.length}</div>
             </div>
-            {/* Only the old long form asked who the money went to. */}
-            {rows.some((r) => r.bucket === 'driver') && (
-              <div className="card">
-                <div className="text-sm muted">Claimed paid to drivers</div>
-                <div className="text-2xl font-bold" style={{ color: 'var(--bad)' }}>
-                  AED {leak.toLocaleString()}
-                </div>
-                <div className="text-xs dim">{rows.filter((r) => r.bucket === 'driver').length} riders</div>
+            {/* The short form does not ask the amount, so the rider count is
+                the headline and the AED total only appears when it is known. */}
+            <div className="card">
+              <div className="text-sm muted">Paid a driver</div>
+              <div className="text-2xl font-bold" style={{ color: 'var(--bad)' }}>
+                {rows.filter((r) => r.bucket === 'driver').length}
               </div>
-            )}
+              <div className="text-xs dim">
+                riders{leak > 0 ? ` · AED ${leak.toLocaleString()} named` : ''}
+              </div>
+            </div>
             <div className="card">
               <div className="text-sm muted">Owe last month</div>
               <div className="text-2xl font-bold" style={{ color: 'var(--warn)' }}>
@@ -425,7 +431,13 @@ export default function Verify() {
                             <div>
                               <b>{monthName(d.prev_month)}:</b>{' '}
                               {d.paid_prev === 'yes'
-                                ? 'paid'
+                                ? `paid — to ${
+                                    d.paid_prev_to === 'driver'
+                                      ? `the driver${car ? ` (${car.driver_name})` : ''}`
+                                      : d.paid_prev_to === 'office'
+                                        ? 'the office'
+                                        : 'not sure who'
+                                  }`
                                 : d.paid_prev === 'no'
                                   ? 'not paid'
                                   : d.paid_prev === 'na'
