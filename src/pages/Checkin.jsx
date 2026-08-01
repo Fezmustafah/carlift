@@ -15,6 +15,7 @@ const phoneOk = (p) => normalizePhone(p).length >= 11
 
 const DRAFT_KEY = 'carlift.checkin.draft'
 const DRAFT_TTL = 6 * 60 * 60 * 1000
+const OUTBOX_KEY = 'carlift.checkin.outbox'
 
 function loadDraft() {
   try {
@@ -24,6 +25,54 @@ function loadDraft() {
   } catch {
     return null
   }
+}
+
+// A rider in a queue on the 5th does not come back a second time, so an answer
+// that fails to send is kept on the phone and pushed on the next load instead of
+// dying with the error message. One phone is handed down the queue, so the
+// outbox holds more than one.
+const outboxKey = (r) => `${r.phone}|${r.for_month}`
+
+function readOutbox() {
+  try {
+    return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]')
+  } catch {
+    return []
+  }
+}
+
+function writeOutbox(rows) {
+  try {
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(rows.slice(-60)))
+  } catch {
+    /* private mode */
+  }
+}
+
+function queue(row) {
+  writeOutbox([...readOutbox().filter((r) => outboxKey(r) !== outboxKey(row)), row])
+}
+
+function unqueue(row) {
+  const left = readOutbox().filter((r) => outboxKey(r) !== outboxKey(row))
+  if (left.length !== readOutbox().length) writeOutbox(left)
+}
+
+// PostgREST refuses the whole insert when one key is not in its schema cache
+// (PGRST204 — a migration that was never run). That is what silently killed the
+// August round: one missing column threw away every rider's answer. A single
+// lost answer is worth far less than the whole check-in, so the unknown key is
+// dropped and the row goes in without it.
+async function insertDeclaration(row) {
+  const payload = { ...row }
+  for (let i = 0; i < 4; i++) {
+    const { error } = await supabase.from('declarations').insert(payload)
+    if (!error) return null
+    const miss = error.code === 'PGRST204' && (error.message || '').match(/'([^']+)' column/)
+    if (!miss || !(miss[1] in payload)) return error
+    delete payload[miss[1]]
+  }
+  return { message: 'schema mismatch' }
 }
 
 const BLANK = { name: '', phone: '', paid_prev: '', paid_prev_to: '', paid: '' }
@@ -62,6 +111,30 @@ export default function Checkin() {
       /* private mode */
     }
   }, [a, step, done])
+
+  // Anything this phone could not send earlier goes now, quietly.
+  useEffect(() => {
+    if (!supabase) return
+    const rows = readOutbox()
+    if (!rows.length) return
+    ;(async () => {
+      const left = []
+      let sentTheOneOnScreen = false
+      for (const r of rows) {
+        if (await insertDeclaration(r)) left.push(r)
+        else if (normalizePhone(draft?.a?.phone || '') === r.phone && r.for_month === month.key)
+          sentTheOneOnScreen = true
+      }
+      writeOutbox(left)
+      // The half-finished answer still on screen is the one that just went in.
+      // Left alone it would sit there under a live Send button and file the same
+      // rider twice, so it becomes the thank-you it earned.
+      if (sentTheOneOnScreen) {
+        clearDraft()
+        setDone(true)
+      }
+    })()
+  }, [])
 
   const set = (k, v) => setA((s) => ({ ...s, [k]: v }))
 
@@ -158,7 +231,7 @@ export default function Checkin() {
     const phone = normalizePhone(a.phone)
     const name = a.name.trim()
 
-    const { error } = await supabase.from('declarations').insert({
+    const row = {
       name,
       phone,
       car_id: carId || null,
@@ -167,17 +240,26 @@ export default function Checkin() {
       paid_prev: a.paid_prev || 'unsure',
       paid_prev_to: a.paid_prev === 'yes' ? a.paid_prev_to || 'unsure' : null,
       prev_month: last.key,
-    })
+    }
+
+    const error = await insertDeclaration(row)
 
     if (error) {
+      // Held on this phone and retried on the next load, so pressing Send again
+      // is worth doing but no longer the only thing standing between the answer
+      // and the office.
+      queue(row)
       setBusy(false)
       setErr(
-        /fetch|network/i.test(error.message || '')
+        (/fetch|network/i.test(error.message || '')
           ? 'No internet. Check your connection and press Send again. / Walang internet. Subukan muli.'
-          : 'Could not send. Please try again. / Hindi naipadala. Subukan muli.'
+          : 'Could not send — saved on this phone, we will send it again. Please press Send once more. / Hindi naipadala. Pakipindot muli ang Ipadala.') +
+          ` (${error.code || 'net'})`
       )
       return
     }
+
+    unqueue(row)
 
     // Riders who were never on the roster get added, so the round also builds
     // the list. A duplicate phone (23505) just means we already knew them.
