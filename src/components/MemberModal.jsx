@@ -6,6 +6,13 @@ const AREAS = ['Sobha Hartland', 'Meydan', 'Other']
 
 export default function MemberModal({ member, cars, onClose, onSaved }) {
   const isNew = !member?.id
+  // A member's payments are ON DELETE CASCADE, so deleting a rider who has paid
+  // silently takes that money out of /report. The count and the total are put in
+  // front of whoever is about to do it.
+  const paid = member?.subscriptions || []
+  const paidTotal = paid.reduce((s, p) => s + Number(p.amount || 0), 0)
+  const [confirming, setConfirming] = useState(false)
+  const [typed, setTyped] = useState('')
   const [form, setForm] = useState({
     name: member?.name || '',
     phone: member?.phone || '',
@@ -56,6 +63,37 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
           ? 'This WhatsApp number is already on the members list. Search for it instead of adding again.'
           : error.message
       )
+      setBusy(false)
+      return
+    }
+    onSaved?.()
+    onClose()
+  }
+
+  // The usual reason a rider leaves the list is that they stopped riding, and
+  // that must not cost the office its record of what they paid. Marking them
+  // 'left' takes them off the roster and keeps every payment in /report.
+  async function markLeft() {
+    if (busy) return
+    setBusy(true)
+    setErr('')
+    const { error } = await supabase.from('members').update({ status: 'left' }).eq('id', member.id)
+    if (error) {
+      setErr(error.message)
+      setBusy(false)
+      return
+    }
+    onSaved?.()
+    onClose()
+  }
+
+  async function remove() {
+    if (busy) return
+    setBusy(true)
+    setErr('')
+    const { error } = await supabase.from('members').delete().eq('id', member.id)
+    if (error) {
+      setErr(error.message)
       setBusy(false)
       return
     }
@@ -150,6 +188,93 @@ export default function MemberModal({ member, cars, onClose, onSaved }) {
             {busy ? 'Saving…' : 'Save'}
           </button>
         </div>
+
+        {/* Removing a member is for test rows and mistakes. A rider who stopped
+            riding should be marked 'left' instead, which is why that way out is
+            offered here rather than only in the status dropdown above. */}
+        {!isNew && (
+          <div className="pt-2" style={{ borderTop: '1px solid var(--line, rgba(128,128,128,0.25))' }}>
+            {!confirming ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(true)
+                  setTyped('')
+                  setErr('')
+                }}
+                className="btn-ghost w-full text-sm"
+                style={{ color: 'var(--bad)' }}
+              >
+                Delete this member
+              </button>
+            ) : (
+              <div
+                className="rounded-2xl p-3 space-y-2.5 text-sm"
+                style={{ border: '2px solid var(--bad)', background: 'var(--bad-soft)' }}
+              >
+                <div className="font-bold" style={{ color: 'var(--bad)' }}>
+                  Delete {member.name} for good?
+                </div>
+
+                {paid.length > 0 ? (
+                  <>
+                    <p style={{ color: 'var(--bad)' }}>
+                      This also deletes <b>{paid.length} payment{paid.length === 1 ? '' : 's'}</b>, and{' '}
+                      <b>AED {paidTotal.toLocaleString()}</b> disappears from the month report. It cannot be undone.
+                    </p>
+                    <p className="dim">
+                      If this is a real rider who simply stopped riding, mark them <b>Left</b> instead — they come off
+                      the roster and the money stays counted.
+                    </p>
+                    <div>
+                      <label className="label">Type DELETE to confirm</label>
+                      <input
+                        className="input"
+                        value={typed}
+                        onChange={(e) => setTyped(e.target.value)}
+                        placeholder="DELETE"
+                        autoComplete="off"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ color: 'var(--bad)' }}>
+                    No payments are recorded against them, so nothing else goes with them. Their check-in answers stay
+                    on the Verify page.
+                  </p>
+                )}
+
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setConfirming(false)}
+                    className="btn-ghost flex-1 py-1.5 text-sm"
+                  >
+                    Keep
+                  </button>
+                  {paid.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={markLeft}
+                      disabled={busy}
+                      className="btn-primary flex-1 py-1.5 text-sm"
+                    >
+                      Mark as Left
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={remove}
+                    disabled={busy || (paid.length > 0 && typed.trim().toUpperCase() !== 'DELETE')}
+                    className="btn-danger flex-1 py-1.5 text-sm"
+                  >
+                    {busy ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </form>
     </div>
   )
