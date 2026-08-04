@@ -146,7 +146,7 @@ export default function Report() {
         e.date,
       ]),
       ...stats.openTakings.map((t) => [
-        'fast lane',
+        'register',
         t.name,
         cars.find((c) => c.id === t.car_id)?.name || '',
         t.amount,
@@ -220,7 +220,7 @@ export default function Report() {
               value={stats.collected}
               color="var(--ok)"
               sub={`${stats.subs.length} payments · ${onetime.length} one-time${
-                stats.openTakings.length ? ` · ${stats.openTakings.length} fast lane` : ''
+                stats.openTakings.length ? ` · ${stats.openTakings.length} register` : ''
               }`}
             />
             <Money label="Expenses" value={stats.spent} color="var(--bad)" sub={`${expenses.length} entries`} />
@@ -273,9 +273,11 @@ export default function Report() {
             <div className="card flex items-center gap-3" style={{ borderColor: 'var(--warn)' }}>
               <span className="text-2xl">⚡</span>
               <div className="flex-1 text-sm">
-                <b>AED {stats.collectedFast.toLocaleString()}</b> from {stats.openTakings.length} fast-lane
-                rider{stats.openTakings.length === 1 ? '' : 's'} is counted in the total but not yet on anybody's
-                record — so they still show as unpaid below. Match them on the Fast lane screen.
+                <b>AED {stats.collectedFast.toLocaleString()}</b> from {stats.openTakings.length}{' '}
+                rider{stats.openTakings.length === 1 ? '' : 's'} written in the register. It is counted in the total
+                above, and the names are in the CSV under <b>register</b>. Those riders are not linked to the members
+                list, so they also appear in "no payment recorded" below — that list is about the members list, not
+                about your register.
               </div>
             </div>
           )}

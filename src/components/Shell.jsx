@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 // with the rest behind More.
 const tabs = [
   { to: '/', label: 'Home', icon: '📊', end: true, bar: true },
-  { to: '/fast', label: 'Fast', icon: '⚡', bar: true },
+  { to: '/fast', label: 'Register', icon: '📓', bar: true },
   { to: '/collect', label: 'Collect', icon: '💵', bar: true },
   { to: '/members', label: 'Members', icon: '👥', bar: true },
   { to: '/verify', label: 'Verify', icon: '🔍' },

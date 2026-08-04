@@ -41,8 +41,15 @@ export default function Day() {
   const [onetime, setOnetime] = useState([])
   const [expenses, setExpenses] = useState([])
   const [closes, setCloses] = useState([])
+  const [cars, setCars] = useState([])
   const [pending] = useState(readOutbox())
   const [loading, setLoading] = useState(true)
+
+  // Money handed out on the day it is handed out: fuel money, a driver's
+  // receipts from last month, a repair. Written here so the bag is counted
+  // against what actually happened, not against what came in.
+  const [payOut, setPayOut] = useState({ amount: '', note: '', category: 'driver', car_id: '' })
+  const [paying, setPaying] = useState(false)
 
   const [counted, setCounted] = useState('')
   const [note, setNote] = useState('')
@@ -53,13 +60,15 @@ export default function Day() {
     setLoading(true)
     const from = `${month}-01`
     const to = `${month}-31`
-    const [t, s, o, e, c] = await Promise.all([
+    const [t, s, o, e, c, cr] = await Promise.all([
       supabase.from('takings').select('*').gte('taken_on', from).lte('taken_on', to),
       supabase.from('subscriptions').select('id, amount, paid_via, created_at').gte('created_at', from),
       supabase.from('onetime_rides').select('*').gte('date', from).lte('date', to),
       supabase.from('expenses').select('*').gte('date', from).lte('date', to),
       supabase.from('day_closes').select('*').gte('day', from).lte('day', to),
+      supabase.from('cars').select('id, name, driver_name').order('name'),
     ])
+    setCars(cr.data || [])
     setTakings(t.data || [])
     setSubs(s.data || [])
     setOnetime(o.data || [])
@@ -78,6 +87,32 @@ export default function Day() {
     () => cashbox({ day, takings, subs, onetime, expenses, pending }),
     [day, takings, subs, onetime, expenses, pending],
   )
+
+  const dayExpenses = useMemo(() => expenses.filter((e) => e.date === day), [expenses, day])
+
+  async function addPayOut() {
+    const amt = Number(payOut.amount)
+    if (!amt || amt <= 0) return setErr('Write how much you gave')
+    setPaying(true)
+    setErr('')
+    const row = {
+      date: day,
+      amount: amt,
+      category: payOut.category,
+      car_id: payOut.car_id || null,
+      note: payOut.note || null,
+    }
+    const { data, error } = await supabase.from('expenses').insert(row).select('*').single()
+    setPaying(false)
+    if (error) return setErr(error.message)
+    setExpenses((es) => [...es, data])
+    setPayOut({ amount: '', note: '', category: payOut.category, car_id: payOut.car_id })
+  }
+
+  async function removePayOut(row) {
+    setExpenses((es) => es.filter((e) => e.id !== row.id))
+    await supabase.from('expenses').delete().eq('id', row.id)
+  }
 
   const saved = closes.find((c) => c.day === day)
 
@@ -139,7 +174,7 @@ export default function Day() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="h1">Day close</h1>
+        <h1 className="h1">End of day</h1>
         <select className="input w-auto" value={month} onChange={(e) => setMonth(e.target.value)}>
           {lastMonths(6).map((k) => (
             <option key={k} value={k}>
@@ -168,7 +203,7 @@ export default function Day() {
           <span className="text-xl">📶</span>
           <div className="flex-1 text-sm">
             <b>{box.unsent}</b> rider{box.unsent === 1 ? '' : 's'} still unsent on this phone — their cash{' '}
-            <b>is</b> counted below. Send them before you close, on the Fast lane screen.
+            <b>is</b> counted below. Send them before you close, on the Register screen.
           </div>
         </div>
       )}
@@ -178,15 +213,15 @@ export default function Day() {
       ) : (
         <>
           <div className="card space-y-1">
-            <div className="text-sm muted">Should be in the bag</div>
-            <div className="text-4xl font-bold" style={{ color: 'var(--ok)' }}>
+            <div className="text-sm muted">Should be left in your hand</div>
+            <div className="text-4xl font-bold" style={{ color: box.expected < 0 ? 'var(--bad)' : 'var(--ok)' }}>
               AED {box.expected.toLocaleString()}
             </div>
             <div className="pt-2">
-              <Line label={`Fast lane cash${box.unsent ? ' (with unsent)' : ''}`} value={box.fast + box.unsentCash} />
-              <Line label="Payments taken on Collect" value={box.payments} />
-              <Line label="One-time riders" value={box.rides} />
-              <Line label="Spent from the bag" value={box.spent} sign="-" />
+              <Line label={`Register, cash${box.unsent ? ' (with unsent)' : ''}`} value={box.fast + box.unsentCash} />
+              {box.payments > 0 && <Line label="Payments taken on Collect" value={box.payments} />}
+              {box.rides > 0 && <Line label="One-time riders" value={box.rides} />}
+              <Line label="Paid out" value={box.spent} sign="-" />
             </div>
             {box.notInHand > 0 && (
               <p className="text-xs dim pt-2">
@@ -194,6 +229,90 @@ export default function Day() {
                 in the bank, not in your hand — it is not part of the number above.
               </p>
             )}
+          </div>
+
+          {/* Money out, on the day it left the bag. */}
+          <div className="card space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-semibold">What you paid out</h2>
+              {box.spent > 0 && (
+                <span className="font-bold" style={{ color: 'var(--bad)' }}>
+                  AED {box.spent.toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {['driver', 'fuel', 'salik', 'maintenance', 'fine', 'other'].map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setPayOut((p) => ({ ...p, category: c }))}
+                  className={`pill ${payOut.category === c ? 'pill-on' : ''}`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                className="input flex-1 text-lg"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                placeholder="Amount"
+                value={payOut.amount}
+                onChange={(e) => setPayOut((p) => ({ ...p, amount: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && addPayOut()}
+              />
+              <button onClick={addPayOut} disabled={paying} className="btn-primary px-5">
+                {paying ? '…' : 'Add'}
+              </button>
+            </div>
+
+            <input
+              className="input"
+              placeholder="What for — e.g. Kashif, last month fuel receipts"
+              value={payOut.note}
+              onChange={(e) => setPayOut((p) => ({ ...p, note: e.target.value }))}
+            />
+
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              <button
+                onClick={() => setPayOut((p) => ({ ...p, car_id: '' }))}
+                className={`pill ${payOut.car_id === '' ? 'pill-on' : ''}`}
+              >
+                No car
+              </button>
+              {cars.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setPayOut((p) => ({ ...p, car_id: c.id }))}
+                  className={`pill ${payOut.car_id === c.id ? 'pill-on' : ''}`}
+                >
+                  {c.name} · {c.driver_name}
+                </button>
+              ))}
+            </div>
+
+            {dayExpenses.map((e) => (
+              <div key={e.id} className="flex items-center gap-3 text-sm py-1.5 divide-row">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{e.category}</div>
+                  <div className="text-xs dim truncate">
+                    {e.note || '—'}
+                    {e.car_id ? ` · ${cars.find((c) => c.id === e.car_id)?.name || ''}` : ''}
+                  </div>
+                </div>
+                <span className="font-semibold shrink-0" style={{ color: 'var(--bad)' }}>
+                  − {Number(e.amount).toLocaleString()}
+                </span>
+                <button onClick={() => removePayOut(e)} className="dim shrink-0 px-1" title="Remove">
+                  ✕
+                </button>
+              </div>
+            ))}
+            {dayExpenses.length === 0 && <p className="text-xs dim">Nothing paid out on this day yet.</p>}
           </div>
 
           <div className="card space-y-3">

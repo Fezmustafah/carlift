@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 // The bottom bar only fits the five screens used every day. Everything else
 // lives here.
 const items = [
-  { to: '/day', icon: '🧮', label: 'Day close', hint: 'Count the cash at the end of the day' },
+  { to: '/day', icon: '🧮', label: 'End of day', hint: 'What you paid out, and what is left to count' },
   { to: '/verify', icon: '🔍', label: 'Verify', hint: 'What riders said, checked against your records' },
   { to: '/report', icon: '📈', label: 'Month report', hint: 'Collected, spent, per car, who did not pay' },
   { to: '/expiring', icon: '⏰', label: 'Expiring', hint: 'Renewals due in the next 3 days' },

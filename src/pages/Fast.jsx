@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { todayISO, addDays, planEnd, daysLeft, fmt, currentMonth } from '../lib/dates'
-import { latestEnd } from '../lib/status'
+import { todayISO, currentMonth } from '../lib/dates'
 import { normalizePhone } from '../lib/wa'
 
-// The fast lane. A queue of riders, cash in one hand, phone in the other:
-// name, amount, next. No number, no plan, no lookup — those cost seconds each
-// and there are sixty people waiting.
+// The register. A queue of riders, cash in one hand, phone in the other:
+// name, amount, next. Nothing else is asked, because everything else costs
+// seconds and there are sixty people waiting.
 //
-// Two rules make it safe to be this crude:
-//  1. Every row is saved on the phone BEFORE it is sent, with an id made here,
-//     so a dead network delays the money, never loses it, and a retry cannot
-//     enter it twice.
-//  2. Nothing is written to the roster. Names typed in a hurry stay in their
-//     own book until they are matched to a real rider afterwards (below).
+// Two rules make it safe to be this plain:
+//  1. Every line is written on the phone BEFORE it is sent, with an id made
+//     here, so a dead network delays the money, never loses it, and a retry
+//     cannot enter the same rider twice.
+//  2. Names are suggested from the register itself, so the same rider is
+//     spelled the same way on the 5th and on the 9th.
 
 const OUTBOX_KEY = 'carlift.fast.outbox'
 const CAR_KEY = 'carlift.fast.car'
@@ -46,21 +45,18 @@ function explain(error) {
 export default function Fast() {
   const month = currentMonth()
   const [cars, setCars] = useState([])
-  const [members, setMembers] = useState([])
   const [presets, setPresets] = useState(FALLBACK_AMOUNTS)
+  const [pastNames, setPastNames] = useState([])
 
   const [car, setCar] = useState(() => localStorage.getItem(CAR_KEY) || '')
   const [method, setMethod] = useState('cash')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [amount, setAmount] = useState('')
-  const [linked, setLinked] = useState(null)
 
-  const [rows, setRows] = useState([]) // today's takings, newest first
-  const [openRows, setOpenRows] = useState([]) // every taking not yet on a record, any day
+  const [rows, setRows] = useState([]) // today's register, newest first
   const [unsent, setUnsent] = useState(readOutbox().length)
   const [err, setErr] = useState('')
-  const [matchOpen, setMatchOpen] = useState(false)
 
   const nameRef = useRef(null)
   const amountRef = useRef(null)
@@ -70,35 +66,30 @@ export default function Fast() {
   }, [car])
 
   async function load() {
-    const [{ data: cs }, { data: ms }, { data: subs }, { data: ts }, { data: os }] = await Promise.all([
+    const [{ data: cs }, { data: ts }, { data: all }] = await Promise.all([
       supabase.from('cars').select('*').order('name'),
-      supabase.from('members').select('id, name, phone, car_id, plan_pref, status, subscriptions(*)').neq('status', 'left'),
-      supabase.from('subscriptions').select('amount').limit(500),
       supabase.from('takings').select('*').eq('taken_on', todayISO()).order('created_at', { ascending: false }),
-      // Not just today. A rider collected on the 6th and never matched must
-      // still be findable on the 9th, or the name is lost to the CSV.
-      supabase.from('takings').select('*').is('subscription_id', null).order('taken_on', { ascending: false }),
+      supabase.from('takings').select('name, amount').order('taken_on', { ascending: false }).limit(400),
     ])
     setCars(cs || [])
-    setMembers(ms || [])
 
-    // Offer the amounts actually being charged, most used first.
+    // Amounts actually being charged in this register, most used first.
     const counts = new Map()
-    for (const s of subs || []) {
-      const v = Number(s.amount)
+    for (const t of all || []) {
+      const v = Number(t.amount)
       if (v > 0) counts.set(v, (counts.get(v) || 0) + 1)
     }
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([v]) => v)
     if (top.length) setPresets(top.sort((a, b) => a - b))
 
-    // Anything still in the outbox belongs at the top of the list, unsent.
+    setPastNames([...new Set((all || []).map((t) => t.name).filter(Boolean))])
+
     const pending = readOutbox()
     const pendingIds = new Set(pending.map((p) => p.id))
     setRows([
       ...pending.map((p) => ({ ...p, _pending: true })),
       ...(ts || []).filter((t) => !pendingIds.has(t.id)),
     ])
-    setOpenRows((os || []).filter((t) => !pendingIds.has(t.id)))
     setUnsent(pending.length)
   }
 
@@ -111,8 +102,8 @@ export default function Fast() {
   }, [])
 
   // Send whatever is waiting. Safe to call at any time: the id is already
-  // fixed, so a row that actually arrived comes back as a duplicate key and is
-  // treated as sent.
+  // fixed, so a line that actually arrived comes back as a duplicate key and
+  // is treated as sent.
   async function sync() {
     let queue = readOutbox()
     if (!queue.length) return
@@ -135,27 +126,27 @@ export default function Fast() {
     const amt = Number(value ?? amount)
     const who = name.trim()
     if (!who) {
-      setErr('Type the name')
+      setErr('Write the name')
       nameRef.current?.focus()
       return
     }
     if (!amt || amt <= 0) {
-      setErr('Enter the amount')
+      setErr('Write the amount')
       amountRef.current?.focus()
       return
     }
     const row = {
       id: newId(),
       name: who,
-      // Optional on purpose. Riders hand over a number when they feel like it,
-      // and waiting for one at the front of a queue is how the round dies.
-      phone: normalizePhone(phone) || linked?.phone || null,
+      // Optional, and it stays optional. Waiting for a number at the front of
+      // a queue is how the round dies.
+      phone: normalizePhone(phone) || null,
       amount: amt,
       car_id: car || null,
       method,
       for_month: month.key,
       taken_on: todayISO(),
-      member_id: linked?.id || null,
+      member_id: null,
       subscription_id: null,
     }
     writeOutbox([...readOutbox(), row])
@@ -164,7 +155,6 @@ export default function Fast() {
     setName('')
     setPhone('')
     setAmount('')
-    setLinked(null)
     setErr('')
     nameRef.current?.focus()
     sync()
@@ -175,95 +165,34 @@ export default function Fast() {
     writeOutbox(queue)
     setUnsent(queue.length)
     setRows((rs) => rs.filter((r) => r.id !== row.id))
-    setOpenRows((os) => os.filter((r) => r.id !== row.id))
     if (!row._pending) await supabase.from('takings').delete().eq('id', row.id)
   }
 
+  // Spellings from the register itself, so one rider does not become two.
   const suggestions = useMemo(() => {
     const q = name.trim().toLowerCase()
-    if (q.length < 2 || linked) return []
-    return members
-      .filter((m) => m.name.toLowerCase().includes(q))
-      .filter((m) => !car || m.car_id === car)
-      .slice(0, 3)
-  }, [name, members, car, linked])
+    if (q.length < 2) return []
+    return pastNames.filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q).slice(0, 3)
+  }, [name, pastNames])
+
+  // Written twice in one day is nearly always a slip, not a second payment.
+  const alreadyToday = useMemo(() => {
+    const q = name.trim().toLowerCase()
+    if (!q) return null
+    return rows.find((r) => r.name.trim().toLowerCase() === q) || null
+  }, [name, rows])
 
   const total = rows.reduce((t, r) => t + Number(r.amount), 0)
+  const cashTotal = rows.filter((r) => (r.method || 'cash') === 'cash').reduce((t, r) => t + Number(r.amount), 0)
   const carName = (id) => cars.find((c) => c.id === id)?.name
-
-  // ---- after the queue: turn takings into real payments ----------------
-  // Everything still waiting to be put on a record: what the server knows about
-  // from earlier days, plus what was taken in this session before the next load.
-  const open = useMemo(() => {
-    const byId = new Map()
-    for (const r of openRows) byId.set(r.id, r)
-    for (const r of rows) if (!r._pending && !r.subscription_id) byId.set(r.id, r)
-    return [...byId.values()].sort((a, b) => String(b.taken_on).localeCompare(String(a.taken_on)))
-  }, [openRows, rows])
-  const readyToCount = open.filter((r) => r.member_id)
-
-  async function countIt(row, member) {
-    const m = member || members.find((x) => x.id === row.member_id)
-    if (!m) return
-    const prevEnd = latestEnd(m)
-    const start = prevEnd && daysLeft(prevEnd) >= 0 ? addDays(prevEnd, 1) : row.taken_on
-    const plan = m.plan_pref === '15d' ? '15d' : '30d'
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .insert({
-        member_id: m.id,
-        plan_type: plan,
-        amount: Number(row.amount),
-        start_date: start,
-        end_date: planEnd(start, plan),
-        paid_via: row.method,
-      })
-      .select('id')
-      .single()
-    if (error) return setErr(error.message)
-    await supabase.from('takings').update({ member_id: m.id, subscription_id: data.id }).eq('id', row.id)
-    if (m.status !== 'active') await supabase.from('members').update({ status: 'active' }).eq('id', m.id)
-    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, member_id: m.id, subscription_id: data.id } : r)))
-    setOpenRows((os) => os.filter((r) => r.id !== row.id))
-  }
-
-  async function countAll() {
-    for (const r of readyToCount) await countIt(r)
-    load()
-  }
-
-  // A taking that came with a number is a whole rider: put them on the roster
-  // and count the money in one go. Without a number the database refuses, on
-  // purpose — see supabase/2026-08-01-purge-no-phone.sql.
-  async function addAsRider(row) {
-    const clean = normalizePhone(row.phone || '')
-    if (clean.length < 9) return setErr('That number is too short to add a rider — fix it on Members.')
-    const { data, error } = await supabase
-      .from('members')
-      .insert({
-        name: row.name,
-        phone: clean,
-        car_id: row.car_id || null,
-        status: 'active',
-        source: 'manual',
-        notes: `Added from the fast lane, ${row.taken_on}`,
-      })
-      .select('id, name, phone, car_id, plan_pref, status, subscriptions(*)')
-      .single()
-    if (error)
-      return setErr(
-        error.code === '23505'
-          ? 'That number is already on the members list — search for the name instead.'
-          : error.message,
-      )
-    setMembers((ms) => [...ms, data])
-    await countIt(row, data)
-  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="h1">Fast lane</h1>
+        <div>
+          <h1 className="h1">Register</h1>
+          <p className="text-sm dim">Name and amount. Nothing else.</p>
+        </div>
         <span className="text-sm muted">{month.en}</span>
       </div>
 
@@ -273,6 +202,7 @@ export default function Fast() {
           <div className="text-3xl font-bold" style={{ color: 'var(--ok)' }}>
             AED {total.toLocaleString()}
           </div>
+          {total !== cashTotal && <div className="text-xs dim">AED {cashTotal.toLocaleString()} of it in cash</div>}
         </div>
         <div className="text-right">
           <div className="text-sm muted">Riders</div>
@@ -292,7 +222,7 @@ export default function Fast() {
         </div>
       )}
 
-      {/* car is picked once for the whole queue */}
+      {/* the car is picked once for the whole queue */}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
         <button onClick={() => setCar('')} className={`pill ${car === '' ? 'pill-on' : ''}`}>
           No car
@@ -308,43 +238,38 @@ export default function Fast() {
         <input
           ref={nameRef}
           className="input text-lg"
-          placeholder="Rider name"
+          placeholder="Name"
           autoFocus
           autoComplete="off"
           value={name}
-          onChange={(e) => {
-            setName(e.target.value)
-            setLinked(null)
-          }}
+          onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && amountRef.current?.focus()}
         />
 
-        {linked && (
-          <p className="text-xs" style={{ color: 'var(--ok)' }}>
-            ✓ on the list — {linked.phone}
+        {alreadyToday && (
+          <p className="text-xs" style={{ color: 'var(--warn)' }}>
+            ⚠ {alreadyToday.name} is already in today's register for AED{' '}
+            {Number(alreadyToday.amount).toLocaleString()}. Write it again only if they really paid twice.
           </p>
         )}
 
         {suggestions.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((m) => (
+            {suggestions.map((n) => (
               <button
-                key={m.id}
+                key={n}
                 onClick={() => {
-                  setName(m.name)
-                  setLinked(m)
+                  setName(n)
                   amountRef.current?.focus()
                 }}
                 className="pill"
               >
-                {m.name}
+                {n}
               </button>
             ))}
           </div>
         )}
 
-        {/* Never required. If the rider gives a number it is kept, and that
-            taking can become a real member later in one tap. */}
         <input
           className="input"
           type="tel"
@@ -406,7 +331,7 @@ export default function Fast() {
               <div className="font-semibold truncate">{r.name}</div>
               <div className="text-xs dim truncate">
                 {carName(r.car_id) || 'no car'} · {r.method}
-                {r.subscription_id ? ' · counted' : ''}
+                {r.phone ? ` · ${r.phone}` : ''}
               </div>
             </div>
             <span className="font-bold shrink-0">{Number(r.amount).toLocaleString()}</span>
@@ -416,103 +341,17 @@ export default function Fast() {
             </button>
           </div>
         ))}
-        {rows.length === 0 && <p className="muted text-center py-8">Nothing taken yet today.</p>}
+        {rows.length === 0 && <p className="muted text-center py-8">Nothing written yet today.</p>}
       </div>
 
-      {rows.length > 0 && (
-        <Link to="/day" className="card flex items-center gap-3">
-          <span className="text-2xl">🧮</span>
-          <div className="flex-1">
-            <div className="font-semibold">Count the bag</div>
-            <div className="text-sm muted">End of the day — check the cash against the books.</div>
-          </div>
-          <span className="dim">›</span>
-        </Link>
-      )}
-
-      {open.length > 0 && (
-        <div className="space-y-2">
-          <button onClick={() => setMatchOpen((v) => !v)} className="card w-full flex items-center gap-3 text-left">
-            <span className="text-2xl">🔗</span>
-            <div className="flex-1">
-              <div className="font-semibold">Put it on their record ({open.length})</div>
-              <div className="text-sm muted">
-                Every day of the round, not only today. Do it after the queue — the money is already safe.
-              </div>
-            </div>
-            <span className="dim">{matchOpen ? '▾' : '›'}</span>
-          </button>
-
-          {matchOpen && (
-            <>
-              {readyToCount.length > 0 && (
-                <button onClick={countAll} className="btn-primary w-full">
-                  Count the {readyToCount.length} already matched
-                </button>
-              )}
-              {open.map((r) => (
-                <MatchRow key={r.id} row={r} members={members} onCount={countIt} onAdd={addAsRider} />
-              ))}
-              <p className="text-xs dim">
-                No match and no number means they stay in this book until you get a number from them. The money is
-                counted either way.
-              </p>
-            </>
-          )}
+      <Link to="/day" className="card flex items-center gap-3">
+        <span className="text-2xl">🧮</span>
+        <div className="flex-1">
+          <div className="font-semibold">End of day</div>
+          <div className="text-sm muted">Write what you paid out, then count what is left.</div>
         </div>
-      )}
-    </div>
-  )
-}
-
-function MatchRow({ row, members, onCount, onAdd }) {
-  const [q, setQ] = useState('')
-  const picked = members.find((m) => m.id === row.member_id)
-  const hits = useMemo(() => {
-    const t = (q || row.name).trim().toLowerCase()
-    if (t.length < 2) return []
-    return members.filter((m) => m.name.toLowerCase().includes(t)).slice(0, 4)
-  }, [q, row.name, members])
-
-  return (
-    <div className="card space-y-2">
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold truncate">{row.name}</div>
-          <div className="text-xs dim">
-            AED {Number(row.amount).toLocaleString()} · {fmt(row.taken_on)}
-            {row.phone ? ` · ${row.phone}` : ' · no number'}
-          </div>
-        </div>
-        {picked && (
-          <button onClick={() => onCount(row, picked)} className="btn-primary px-3 py-1.5 text-sm shrink-0">
-            Count it
-          </button>
-        )}
-      </div>
-      {!picked && (
-        <>
-          <input
-            className="input"
-            placeholder={`Search the list for "${row.name}"…`}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <div className="flex flex-wrap gap-2">
-            {hits.map((m) => (
-              <button key={m.id} onClick={() => onCount(row, m)} className="pill">
-                {m.name} <span className="dim">· {m.phone}</span>
-              </button>
-            ))}
-            {hits.length === 0 && <span className="text-xs dim">Nobody with that name on the list.</span>}
-          </div>
-          {row.phone && (
-            <button onClick={() => onAdd(row)} className="btn-primary w-full py-2 text-sm">
-              Not on the list — add {row.name} as a new rider
-            </button>
-          )}
-        </>
-      )}
+        <span className="dim">›</span>
+      </Link>
     </div>
   )
 }
