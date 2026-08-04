@@ -57,6 +57,7 @@ export default function Fast() {
   const [linked, setLinked] = useState(null)
 
   const [rows, setRows] = useState([]) // today's takings, newest first
+  const [openRows, setOpenRows] = useState([]) // every taking not yet on a record, any day
   const [unsent, setUnsent] = useState(readOutbox().length)
   const [err, setErr] = useState('')
   const [matchOpen, setMatchOpen] = useState(false)
@@ -69,11 +70,14 @@ export default function Fast() {
   }, [car])
 
   async function load() {
-    const [{ data: cs }, { data: ms }, { data: subs }, { data: ts }] = await Promise.all([
+    const [{ data: cs }, { data: ms }, { data: subs }, { data: ts }, { data: os }] = await Promise.all([
       supabase.from('cars').select('*').order('name'),
       supabase.from('members').select('id, name, phone, car_id, plan_pref, status, subscriptions(*)').neq('status', 'left'),
       supabase.from('subscriptions').select('amount').limit(500),
       supabase.from('takings').select('*').eq('taken_on', todayISO()).order('created_at', { ascending: false }),
+      // Not just today. A rider collected on the 6th and never matched must
+      // still be findable on the 9th, or the name is lost to the CSV.
+      supabase.from('takings').select('*').is('subscription_id', null).order('taken_on', { ascending: false }),
     ])
     setCars(cs || [])
     setMembers(ms || [])
@@ -94,6 +98,7 @@ export default function Fast() {
       ...pending.map((p) => ({ ...p, _pending: true })),
       ...(ts || []).filter((t) => !pendingIds.has(t.id)),
     ])
+    setOpenRows((os || []).filter((t) => !pendingIds.has(t.id)))
     setUnsent(pending.length)
   }
 
@@ -170,6 +175,7 @@ export default function Fast() {
     writeOutbox(queue)
     setUnsent(queue.length)
     setRows((rs) => rs.filter((r) => r.id !== row.id))
+    setOpenRows((os) => os.filter((r) => r.id !== row.id))
     if (!row._pending) await supabase.from('takings').delete().eq('id', row.id)
   }
 
@@ -186,7 +192,14 @@ export default function Fast() {
   const carName = (id) => cars.find((c) => c.id === id)?.name
 
   // ---- after the queue: turn takings into real payments ----------------
-  const open = rows.filter((r) => !r._pending && !r.subscription_id)
+  // Everything still waiting to be put on a record: what the server knows about
+  // from earlier days, plus what was taken in this session before the next load.
+  const open = useMemo(() => {
+    const byId = new Map()
+    for (const r of openRows) byId.set(r.id, r)
+    for (const r of rows) if (!r._pending && !r.subscription_id) byId.set(r.id, r)
+    return [...byId.values()].sort((a, b) => String(b.taken_on).localeCompare(String(a.taken_on)))
+  }, [openRows, rows])
   const readyToCount = open.filter((r) => r.member_id)
 
   async function countIt(row, member) {
@@ -211,6 +224,7 @@ export default function Fast() {
     await supabase.from('takings').update({ member_id: m.id, subscription_id: data.id }).eq('id', row.id)
     if (m.status !== 'active') await supabase.from('members').update({ status: 'active' }).eq('id', m.id)
     setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, member_id: m.id, subscription_id: data.id } : r)))
+    setOpenRows((os) => os.filter((r) => r.id !== row.id))
   }
 
   async function countAll() {
@@ -422,7 +436,9 @@ export default function Fast() {
             <span className="text-2xl">🔗</span>
             <div className="flex-1">
               <div className="font-semibold">Put it on their record ({open.length})</div>
-              <div className="text-sm muted">Do this after the queue — the money is already safe.</div>
+              <div className="text-sm muted">
+                Every day of the round, not only today. Do it after the queue — the money is already safe.
+              </div>
             </div>
             <span className="dim">{matchOpen ? '▾' : '›'}</span>
           </button>
