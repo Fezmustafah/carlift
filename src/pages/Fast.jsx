@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { todayISO, currentMonth } from '../lib/dates'
 import { normalizePhone } from '../lib/wa'
+import { mergeNames, matchNames } from '../lib/names'
 
 // The register. A queue of riders, cash in one hand, phone in the other:
 // name, amount, next. Nothing else is asked, because everything else costs
@@ -19,14 +20,32 @@ const OUTBOX_KEY = 'carlift.fast.outbox'
 const CAR_KEY = 'carlift.fast.car'
 const FALLBACK_AMOUNTS = [200, 300, 400, 500]
 
+// If the phone refuses to write to storage — private window, storage full — the
+// queue lives in memory instead. Worse than the disk, far better than dropping
+// a rider who has already handed over the money.
+let memQueue = null
+
 const readOutbox = () => {
+  if (memQueue) return memQueue
   try {
-    return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]')
+    const raw = localStorage.getItem(OUTBOX_KEY)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
   }
 }
-const writeOutbox = (rows) => localStorage.setItem(OUTBOX_KEY, JSON.stringify(rows))
+
+const writeOutbox = (rows) => {
+  try {
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(rows))
+    memQueue = null
+    return true
+  } catch {
+    memQueue = rows
+    return false
+  }
+}
 
 const newId = () =>
   crypto.randomUUID?.() ??
@@ -56,6 +75,7 @@ export default function Fast() {
 
   const [rows, setRows] = useState([]) // today's register, newest first
   const [unsent, setUnsent] = useState(readOutbox().length)
+  const [confirmId, setConfirmId] = useState(null)
   const [err, setErr] = useState('')
 
   const nameRef = useRef(null)
@@ -66,10 +86,13 @@ export default function Fast() {
   }, [car])
 
   async function load() {
-    const [{ data: cs }, { data: ts }, { data: all }] = await Promise.all([
+    const [{ data: cs }, { data: ts }, { data: all }, { data: ms }] = await Promise.all([
       supabase.from('cars').select('*').order('name'),
       supabase.from('takings').select('*').eq('taken_on', todayISO()).order('created_at', { ascending: false }),
       supabase.from('takings').select('name, amount').order('taken_on', { ascending: false }).limit(400),
+      // Names only. The members list is a spelling aid here, nothing more —
+      // tapping one fills the box and links nothing.
+      supabase.from('members').select('name').neq('status', 'left').order('name').limit(1000),
     ])
     setCars(cs || [])
 
@@ -82,7 +105,7 @@ export default function Fast() {
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([v]) => v)
     if (top.length) setPresets(top.sort((a, b) => a - b))
 
-    setPastNames([...new Set((all || []).map((t) => t.name).filter(Boolean))])
+    setPastNames(mergeNames((all || []).map((t) => t.name), (ms || []).map((m) => m.name)))
 
     const pending = readOutbox()
     const pendingIds = new Set(pending.map((p) => p.id))
@@ -149,18 +172,29 @@ export default function Fast() {
       member_id: null,
       subscription_id: null,
     }
-    writeOutbox([...readOutbox(), row])
+    const onDisk = writeOutbox([...readOutbox(), row])
     setUnsent((n) => n + 1)
     setRows((rs) => [{ ...row, _pending: true }, ...rs])
     setName('')
     setPhone('')
     setAmount('')
-    setErr('')
+    setErr(
+      onDisk
+        ? ''
+        : 'This phone will not let the app save — keep this page open until every line says saved, and take a backup.',
+    )
     nameRef.current?.focus()
     sync()
   }
 
+  // Two taps to delete. One mis-tap on a phone should not erase a rider who
+  // paid, and the money is the whole point of the book.
   async function remove(row) {
+    if (confirmId !== row.id) {
+      setConfirmId(row.id)
+      return
+    }
+    setConfirmId(null)
     const queue = readOutbox().filter((q) => q.id !== row.id)
     writeOutbox(queue)
     setUnsent(queue.length)
@@ -168,12 +202,39 @@ export default function Fast() {
     if (!row._pending) await supabase.from('takings').delete().eq('id', row.id)
   }
 
-  // Spellings from the register itself, so one rider does not become two.
-  const suggestions = useMemo(() => {
-    const q = name.trim().toLowerCase()
-    if (q.length < 2) return []
-    return pastNames.filter((n) => n.toLowerCase().includes(q) && n.toLowerCase() !== q).slice(0, 3)
-  }, [name, pastNames])
+  // A copy of the whole book in his own hands, for the day he stops trusting
+  // any of this. Includes the lines that have not reached the server yet.
+  async function backup() {
+    const { data, error } = await supabase.from('takings').select('*').order('taken_on', { ascending: false })
+    if (error) return setErr(explain(error))
+    const all = [...readOutbox().map((p) => ({ ...p, _pending: true })), ...(data || [])]
+    if (!all.length) return setErr('Nothing in the register to back up yet.')
+    const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const csv = [
+      ['date', 'name', 'number', 'amount', 'method', 'car', 'saved'],
+      ...all.map((r) => [
+        r.taken_on,
+        r.name,
+        r.phone || '',
+        r.amount,
+        r.method,
+        carName(r.car_id) || '',
+        r._pending ? 'NOT SENT YET' : 'saved',
+      ]),
+    ]
+      .map((r) => r.map(cell).join(','))
+      .join('\r\n')
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `carlift-register-${todayISO()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Spellings from the register and the members list, so one rider does not
+  // become two.
+  const suggestions = useMemo(() => matchNames(pastNames, name), [name, pastNames])
 
   // Written twice in one day is nearly always a slip, not a second payment.
   const alreadyToday = useMemo(() => {
@@ -193,7 +254,12 @@ export default function Fast() {
           <h1 className="h1">Register</h1>
           <p className="text-sm dim">Name and amount. Nothing else.</p>
         </div>
-        <span className="text-sm muted">{month.en}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm muted">{month.en}</span>
+          <button onClick={backup} className="btn-ghost px-3 py-1.5 text-sm" title="Download the whole register">
+            ⬇ Backup
+          </button>
+        </div>
       </div>
 
       <div className="card flex items-center justify-between gap-3">
@@ -210,16 +276,23 @@ export default function Fast() {
         </div>
       </div>
 
-      {unsent > 0 && (
+      {unsent > 0 ? (
         <div className="card flex items-center gap-3" style={{ borderColor: 'var(--warn)' }}>
           <span className="text-xl">📶</span>
           <div className="flex-1 text-sm">
-            <b>{unsent}</b> not sent yet — saved on this phone. Keep going.
+            <b>{unsent}</b> not sent yet — held on this phone. Keep going; they go up by themselves when the signal
+            comes back. Do not clear the browser until this is gone.
           </div>
           <button onClick={sync} className="btn-ghost px-3 py-1.5 text-sm">
             Retry
           </button>
         </div>
+      ) : (
+        rows.length > 0 && (
+          <p className="text-sm text-center" style={{ color: 'var(--ok)' }}>
+            ✓ All {rows.length} saved on the server
+          </p>
+        )
       )}
 
       {/* the car is picked once for the whole queue */}
@@ -336,9 +409,24 @@ export default function Fast() {
             </div>
             <span className="font-bold shrink-0">{Number(r.amount).toLocaleString()}</span>
             {r._pending && <span className="chip chip-warn shrink-0">unsent</span>}
-            <button onClick={() => remove(r)} className="dim shrink-0 px-1" title="Remove">
-              ✕
-            </button>
+            {confirmId === r.id ? (
+              <>
+                <button
+                  onClick={() => remove(r)}
+                  className="btn-danger shrink-0 px-2 py-1 text-xs"
+                  title="Delete this line"
+                >
+                  Delete
+                </button>
+                <button onClick={() => setConfirmId(null)} className="dim shrink-0 px-1 text-xs">
+                  Keep
+                </button>
+              </>
+            ) : (
+              <button onClick={() => remove(r)} className="dim shrink-0 px-1" title="Remove">
+                ✕
+              </button>
+            )}
           </div>
         ))}
         {rows.length === 0 && <p className="muted text-center py-8">Nothing written yet today.</p>}
