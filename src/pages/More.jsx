@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 // lives here.
 const items = [
   { to: '/day', icon: '🧮', label: 'End of day', hint: 'What you paid out, and what is left to count' },
+  { to: '/sheet', icon: '🖨', label: 'Sheet / PDF', hint: 'Printable record of a day or a month' },
   { to: '/verify', icon: '🔍', label: 'Verify', hint: 'What riders said, checked against your records' },
   { to: '/report', icon: '📈', label: 'Month report', hint: 'Collected, spent, per car, who did not pay' },
   { to: '/expiring', icon: '⏰', label: 'Expiring', hint: 'Renewals due in the next 3 days' },

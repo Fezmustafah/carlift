@@ -53,6 +53,23 @@ const newId = () =>
     (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16),
   )
 
+// A column this app knows about but the database has not been given yet must
+// not strand a rider's money in the outbox. PostgREST names the missing column;
+// drop it and send the rest. The line arrives without that one detail, which is
+// worth incomparably more than not arriving at all.
+async function insertSurvivingMissingColumns(row) {
+  let payload = row
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await supabase.from('takings').insert(payload)
+    if (res.error?.code !== 'PGRST204') return res
+    const col = /'([^']+)' column/.exec(res.error.message)?.[1]
+    if (!col || !(col in payload)) return res
+    const { [col]: _dropped, ...rest } = payload
+    payload = rest
+  }
+  return await supabase.from('takings').insert(payload)
+}
+
 // Nothing here is worth reading in front of a queue except what to do next.
 function explain(error) {
   if (!navigator.onLine) return 'No internet — every rider is saved on this phone. Keep going.'
@@ -72,10 +89,12 @@ export default function Fast() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [amount, setAmount] = useState('')
+  const [owed, setOwed] = useState('')
 
   const [rows, setRows] = useState([]) // today's register, newest first
   const [unsent, setUnsent] = useState(readOutbox().length)
   const [confirmId, setConfirmId] = useState(null)
+  const [owedOpen, setOwedOpen] = useState(false)
   const [err, setErr] = useState('')
 
   const nameRef = useRef(null)
@@ -132,7 +151,7 @@ export default function Fast() {
     if (!queue.length) return
     for (const row of [...queue]) {
       const { _pending, ...clean } = row
-      const { error } = await supabase.from('takings').insert(clean)
+      const { error } = await insertSurvivingMissingColumns(clean)
       if (error && error.code !== '23505') {
         setErr(explain(error))
         break
@@ -165,6 +184,10 @@ export default function Fast() {
       // a queue is how the round dies.
       phone: normalizePhone(phone) || null,
       amount: amt,
+      // What he still has to come back for. Never part of the cash count, and
+      // only sent when there is one — a full payment then cannot be held up by
+      // a migration that has not been run yet.
+      ...(Number(owed) > 0 ? { owed: Number(owed) } : {}),
       car_id: car || null,
       method,
       for_month: month.key,
@@ -178,6 +201,7 @@ export default function Fast() {
     setName('')
     setPhone('')
     setAmount('')
+    setOwed('')
     setErr(
       onDisk
         ? ''
@@ -211,12 +235,13 @@ export default function Fast() {
     if (!all.length) return setErr('Nothing in the register to back up yet.')
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
     const csv = [
-      ['date', 'name', 'number', 'amount', 'method', 'car', 'saved'],
+      ['date', 'name', 'number', 'amount', 'still owes', 'method', 'car', 'saved'],
       ...all.map((r) => [
         r.taken_on,
         r.name,
         r.phone || '',
         r.amount,
+        Number(r.owed) > 0 ? r.owed : '',
         r.method,
         carName(r.car_id) || '',
         r._pending ? 'NOT SENT YET' : 'saved',
@@ -259,6 +284,9 @@ export default function Fast() {
           <button onClick={backup} className="btn-ghost px-3 py-1.5 text-sm" title="Download the whole register">
             ⬇ Backup
           </button>
+          <Link to={`/sheet?day=${todayISO()}`} className="btn-ghost px-3 py-1.5 text-sm" title="Printable sheet">
+            🖨 PDF
+          </Link>
         </div>
       </div>
 
@@ -377,6 +405,36 @@ export default function Fast() {
           </button>
         </div>
 
+        {/* Kept out of the way: most riders pay in full, and every extra box on
+            this screen is a second per person. */}
+        {owedOpen || owed ? (
+          <div>
+            <label className="label">Still owes — they will bring it later</label>
+            <input
+              className="input"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              placeholder="e.g. 150"
+              value={owed}
+              onChange={(e) => setOwed(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+            />
+            <p className="text-xs dim mt-1">
+              This is not counted as cash. It goes on the list to recover.
+            </p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOwedOpen(true)}
+            className="text-sm font-medium"
+            style={{ color: 'var(--brand)' }}
+          >
+            + Paid only part of it
+          </button>
+        )}
+
         <div className="flex gap-2">
           {['cash', 'card', 'transfer'].map((m) => (
             <button
@@ -407,6 +465,9 @@ export default function Fast() {
                 {r.phone ? ` · ${r.phone}` : ''}
               </div>
             </div>
+            {Number(r.owed) > 0 && (
+              <span className="chip chip-warn shrink-0">owes {Number(r.owed).toLocaleString()}</span>
+            )}
             <span className="font-bold shrink-0">{Number(r.amount).toLocaleString()}</span>
             {r._pending && <span className="chip chip-warn shrink-0">unsent</span>}
             {confirmId === r.id ? (

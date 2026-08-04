@@ -12,6 +12,7 @@ import Verify from './pages/Verify'
 import Collect from './pages/Collect'
 import Fast from './pages/Fast'
 import Day from './pages/Day'
+import Sheet from './pages/Sheet'
 import Report from './pages/Report'
 import ShowQr from './pages/ShowQr'
 import More from './pages/More'
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/collect" element={<Collect />} />
         <Route path="/fast" element={<Fast />} />
         <Route path="/day" element={<Day />} />
+        <Route path="/sheet" element={<Sheet />} />
         <Route path="/report" element={<Report />} />
         <Route path="/qr" element={<ShowQr />} />
         <Route path="/more" element={<More />} />

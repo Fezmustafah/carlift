@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { todayISO, addDays, fmt } from '../lib/dates'
+import { Link } from 'react-router-dom'
 import { monthKey, monthLabel, lastMonths } from '../lib/month'
 import { cashbox, difference, daysOfMonth } from '../lib/cashbox'
 
@@ -42,6 +43,7 @@ export default function Day() {
   const [expenses, setExpenses] = useState([])
   const [closes, setCloses] = useState([])
   const [cars, setCars] = useState([])
+  const [debts, setDebts] = useState([])
   const [pending] = useState(readOutbox())
   const [loading, setLoading] = useState(true)
 
@@ -60,15 +62,20 @@ export default function Day() {
     setLoading(true)
     const from = `${month}-01`
     const to = `${month}-31`
-    const [t, s, o, e, c, cr] = await Promise.all([
+    const [t, s, o, e, c, cr, db] = await Promise.all([
       supabase.from('takings').select('*').gte('taken_on', from).lte('taken_on', to),
       supabase.from('subscriptions').select('id, amount, paid_via, created_at').gte('created_at', from),
       supabase.from('onetime_rides').select('*').gte('date', from).lte('date', to),
       supabase.from('expenses').select('*').gte('date', from).lte('date', to),
       supabase.from('day_closes').select('*').gte('day', from).lte('day', to),
       supabase.from('cars').select('id, name, driver_name').order('name'),
+      // Every open balance, any month — a debt does not end with the month.
+      supabase.from('takings').select('*').gt('owed', 0).order('taken_on'),
     ])
     setCars(cr.data || [])
+    // Unsent lines carry their promises too — a debt does not begin at the
+    // moment the server hears about it.
+    setDebts([...readOutbox().filter((p) => Number(p.owed) > 0), ...(db.data || [])])
     setTakings(t.data || [])
     setSubs(s.data || [])
     setOnetime(o.data || [])
@@ -107,6 +114,31 @@ export default function Day() {
     if (error) return setErr(error.message)
     setExpenses((es) => [...es, data])
     setPayOut({ amount: '', note: '', category: payOut.category, car_id: payOut.car_id })
+  }
+
+  // A promise kept. The recovered money is written as a new line on the day it
+  // actually arrived — not backdated to the day it was promised — and the old
+  // balance is closed so it stops appearing on the list.
+  async function recover(row) {
+    setErr('')
+    const line = {
+      id: crypto.randomUUID(),
+      name: row.name,
+      phone: row.phone || null,
+      amount: Number(row.owed),
+      owed: 0,
+      car_id: row.car_id || null,
+      method: 'cash',
+      for_month: monthKey(),
+      taken_on: todayISO(),
+      note: `Balance from ${row.taken_on}`,
+    }
+    const { error } = await supabase.from('takings').insert(line)
+    if (error) return setErr(error.message)
+    const { error: e2 } = await supabase.from('takings').update({ owed: 0 }).eq('id', row.id)
+    if (e2) return setErr(e2.message)
+    setDebts((ds) => ds.filter((d) => d.id !== row.id))
+    setTakings((ts) => [...ts.map((t) => (t.id === row.id ? { ...t, owed: 0 } : t)), line])
   }
 
   async function removePayOut(row) {
@@ -373,6 +405,54 @@ export default function Day() {
               </p>
             )}
           </div>
+
+          {debts.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="h2">Still to recover</h2>
+                <span className="font-bold" style={{ color: 'var(--warn)' }}>
+                  AED {debts.reduce((t, d) => t + Number(d.owed), 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="card space-y-1">
+                {debts.map((d) => (
+                  <div key={d.id} className="flex items-center gap-3 py-1.5 divide-row">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{d.name}</div>
+                      <div className="text-xs dim truncate">
+                        paid {Number(d.amount).toLocaleString()} on {fmt(d.taken_on)}
+                        {d.car_id ? ` · ${cars.find((c) => c.id === d.car_id)?.name || ''}` : ''}
+                        {d.phone ? ` · ${d.phone}` : ''}
+                      </div>
+                    </div>
+                    <span className="chip chip-warn shrink-0">owes {Number(d.owed).toLocaleString()}</span>
+                    {/* A line the server has not seen cannot be closed on the
+                        server either — send it first. */}
+                    {pending.some((p) => p.id === d.id) ? (
+                      <span className="chip chip-warn shrink-0">unsent</span>
+                    ) : (
+                      <button onClick={() => recover(d)} className="btn-primary px-3 py-1.5 text-sm shrink-0">
+                        Took it
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs dim">
+                "Took it" writes the balance as a new line today and closes it here. This money is not part of the
+                bag until you tap it.
+              </p>
+            </div>
+          )}
+
+          <Link to={`/sheet?month=${month}`} className="card flex items-center gap-3 no-print">
+            <span className="text-2xl">🖨</span>
+            <div className="flex-1">
+              <div className="font-semibold">Sheet for {monthLabel(month)}</div>
+              <div className="text-sm muted">Every rider, every expense, what is left to recover — save as PDF.</div>
+            </div>
+            <span className="dim">›</span>
+          </Link>
 
           {round.length > 0 && (
             <div className="space-y-2">
