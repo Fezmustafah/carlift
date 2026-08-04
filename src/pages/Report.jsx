@@ -26,6 +26,7 @@ export default function Report() {
   const [onetime, setOnetime] = useState([])
   const [expenses, setExpenses] = useState([])
   const [decls, setDecls] = useState([])
+  const [takings, setTakings] = useState([])
   const [loading, setLoading] = useState(true)
 
   const { start, end } = useMemo(() => monthRange(month), [month])
@@ -38,12 +39,14 @@ export default function Report() {
       supabase.from('onetime_rides').select('*').gte('date', start).lte('date', end),
       supabase.from('expenses').select('*').gte('date', start).lte('date', end),
       supabase.from('declarations').select('*'),
-    ]).then(([m, c, o, e, d]) => {
+      supabase.from('takings').select('*').gte('taken_on', start).lte('taken_on', end),
+    ]).then(([m, c, o, e, d, t]) => {
       setMembers(m.data || [])
       setCars(c.data || [])
       setOnetime(o.data || [])
       setExpenses(e.data || [])
       setDecls(d.data || [])
+      setTakings(t.data || [])
       setLoading(false)
     })
   }, [start, end])
@@ -60,6 +63,12 @@ export default function Report() {
     const collectedSubs = subs.reduce((t, s) => t + Number(s.amount), 0)
     const collectedOnetime = onetime.reduce((t, o) => t + Number(o.amount), 0)
     const spent = expenses.reduce((t, e) => t + Number(e.amount), 0)
+
+    // Fast-lane cash. Once a taking has been put on a rider's record it is
+    // already inside collectedSubs — only the loose ones are added here, or the
+    // same money would be counted twice.
+    const openTakings = takings.filter((t) => !t.subscription_id)
+    const collectedFast = openTakings.reduce((t, r) => t + Number(r.amount), 0)
 
     const perCar = cars.map((c) => {
       const carSubs = subs.filter((s) => s.member.car_id === c.id)
@@ -88,7 +97,9 @@ export default function Report() {
       subs,
       collectedSubs,
       collectedOnetime,
-      collected: collectedSubs + collectedOnetime,
+      openTakings,
+      collectedFast,
+      collected: collectedSubs + collectedOnetime + collectedFast,
       spent,
       perCar,
       noCarSubs,
@@ -98,7 +109,7 @@ export default function Report() {
       saidNotPaid,
       unpaid,
     }
-  }, [members, cars, onetime, expenses, decls, month, start, end])
+  }, [members, cars, onetime, expenses, decls, takings, month, start, end])
 
   function exportCsv() {
     const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -133,6 +144,16 @@ export default function Report() {
         e.date,
         '',
         e.date,
+      ]),
+      ...stats.openTakings.map((t) => [
+        'fast lane',
+        t.name,
+        cars.find((c) => c.id === t.car_id)?.name || '',
+        t.amount,
+        t.method,
+        t.taken_on,
+        '',
+        t.taken_on,
       ]),
       ...stats.unpaid.map((m) => [
         'did not pay',
@@ -198,7 +219,9 @@ export default function Report() {
               label="Collected"
               value={stats.collected}
               color="var(--ok)"
-              sub={`${stats.subs.length} payments · ${onetime.length} one-time`}
+              sub={`${stats.subs.length} payments · ${onetime.length} one-time${
+                stats.openTakings.length ? ` · ${stats.openTakings.length} fast lane` : ''
+              }`}
             />
             <Money label="Expenses" value={stats.spent} color="var(--bad)" sub={`${expenses.length} entries`} />
             <Money label="Net" value={net} color={net >= 0 ? 'var(--ok)' : 'var(--bad)'} />
@@ -245,6 +268,17 @@ export default function Report() {
               )}
             </div>
           </div>
+
+          {stats.openTakings.length > 0 && (
+            <div className="card flex items-center gap-3" style={{ borderColor: 'var(--warn)' }}>
+              <span className="text-2xl">⚡</span>
+              <div className="flex-1 text-sm">
+                <b>AED {stats.collectedFast.toLocaleString()}</b> from {stats.openTakings.length} fast-lane
+                rider{stats.openTakings.length === 1 ? '' : 's'} is counted in the total but not yet on anybody's
+                record — so they still show as unpaid below. Match them on the Fast lane screen.
+              </div>
+            </div>
+          )}
 
           {stats.monthDecls.length > 0 && (
             <div className="space-y-2">
