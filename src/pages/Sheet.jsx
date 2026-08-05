@@ -21,19 +21,23 @@ const readOutbox = () => {
   }
 }
 
-function Row({ cells, bold, muted }) {
+function Row({ cells, bold, cols = '1.6fr 1fr 0.8fr 0.8fr', rightFrom = 2 }) {
   return (
     <div
       className="grid gap-2 py-1.5 text-sm divide-row"
-      style={{ gridTemplateColumns: '1.6fr 1fr 0.8fr 0.8fr', fontWeight: bold ? 700 : 400 }}
+      style={{ gridTemplateColumns: cols, fontWeight: bold ? 700 : 400 }}
     >
-      <span className={muted ? 'muted' : ''}>{cells[0]}</span>
-      <span className={muted ? 'muted' : ''}>{cells[1]}</span>
-      <span className="text-right">{cells[2]}</span>
-      <span className="text-right">{cells[3]}</span>
+      {cells.map((c, i) => (
+        <span key={i} className={i >= rightFrom ? 'text-right' : 'truncate'}>
+          {c}
+        </span>
+      ))}
     </div>
   )
 }
+
+const RIDER_COLS = '1.5fr 0.9fr 0.7fr 0.7fr 0.7fr'
+const METHOD_LABEL = { cash: 'Cash', card: 'CARD', transfer: 'BANK' }
 
 export default function Sheet() {
   const [params, setParams] = useSearchParams()
@@ -106,7 +110,28 @@ export default function Sheet() {
     const spent = expenses.reduce((t, e) => t + Number(e.amount), 0)
     const toRecover = debts.reduce((t, l) => t + Number(l.owed), 0)
     const rides = onetime.reduce((t, o) => t + Number(o.amount), 0)
-    return { collected, spent, inHand, toRecover, rides, net: collected + rides - spent }
+
+    // Split by how it was paid. Cash is what passed through his hands; card and
+    // bank went to the account without ever being in the bag, and a sheet that
+    // does not say so reads as if he is holding all of it.
+    const by = (m) =>
+      lines.filter((l) => (l.method || 'cash') === m).reduce((t, l) => t + Number(l.amount), 0)
+    const cash = by('cash')
+    const card = by('card')
+    const transfer = by('transfer')
+
+    return {
+      collected,
+      spent,
+      inHand,
+      toRecover,
+      rides,
+      cash,
+      card,
+      transfer,
+      notCash: card + transfer,
+      net: collected + rides - spent,
+    }
   }, [lines, takings, subs, onetime, expenses, pending, debts, day, start])
 
   const carName = (id) => cars.find((c) => c.id === id)?.name || ''
@@ -153,7 +178,10 @@ export default function Sheet() {
               <div className="text-2xl font-bold" style={{ color: 'var(--ok)' }}>
                 {totals.collected.toLocaleString()}
               </div>
-              <div className="text-xs dim">{lines.length} riders</div>
+              <div className="text-xs dim">
+                {lines.length} riders
+                {totals.notCash > 0 ? ` · ${totals.cash.toLocaleString()} cash + ${totals.notCash.toLocaleString()} card/bank` : ''}
+              </div>
             </div>
             <div className="card">
               <div className="text-sm muted">Spent</div>
@@ -181,20 +209,28 @@ export default function Sheet() {
           <div>
             <h3 className="h2 mb-1">Riders</h3>
             <div className="card">
-              <Row cells={['Name', 'Car', 'Paid', 'Owes']} bold />
+              <Row cells={['Name', 'Car', 'How', 'Paid', 'Owes']} bold cols={RIDER_COLS} rightFrom={3} />
               {lines.map((l) => (
                 <Row
                   key={l.id}
+                  cols={RIDER_COLS}
+                  rightFrom={3}
                   cells={[
                     l.name + (l._pending ? ' (not sent)' : ''),
                     scope === 'day' ? carName(l.car_id) : `${fmt(l.taken_on)} ${carName(l.car_id)}`,
+                    METHOD_LABEL[l.method || 'cash'] || l.method,
                     Number(l.amount).toLocaleString(),
                     Number(l.owed) > 0 ? Number(l.owed).toLocaleString() : '',
                   ]}
                 />
               ))}
               {lines.length === 0 && <p className="muted text-sm py-3">Nobody written in this period.</p>}
-              <Row cells={['Total', '', totals.collected.toLocaleString(), '']} bold />
+              <Row
+                cells={['Total', '', '', totals.collected.toLocaleString(), '']}
+                bold
+                cols={RIDER_COLS}
+                rightFrom={3}
+              />
             </div>
           </div>
 
@@ -242,9 +278,32 @@ export default function Sheet() {
             </div>
           )}
 
-          <div className="text-xs dim">
-            Cash that should have been in hand across these days: AED {totals.inHand.toLocaleString()}. Card and bank
-            transfers are collected money but went to the bank, so they are not part of that figure.
+          {/* The closing statement. Cash and card are both collected money and
+              only one of them was ever in his hand — the sheet has to say which
+              is which, or it reads as a claim to be holding all of it. */}
+          <div>
+            <h3 className="h2 mb-1">How the money came in</h3>
+            <div className="card">
+              <Row cells={['Cash collected', '', totals.cash.toLocaleString(), '']} />
+              {totals.card > 0 && <Row cells={['Card', '', totals.card.toLocaleString(), '']} />}
+              {totals.transfer > 0 && <Row cells={['Bank transfer', '', totals.transfer.toLocaleString(), '']} />}
+              {totals.rides > 0 && <Row cells={['One-time riders (cash)', '', totals.rides.toLocaleString(), '']} />}
+              <Row cells={['Total collected', '', (totals.collected + totals.rides).toLocaleString(), '']} bold />
+              <Row cells={['Paid out', '', `− ${totals.spent.toLocaleString()}`, '']} />
+              <Row cells={['Net', '', totals.net.toLocaleString(), '']} bold />
+            </div>
+            <div className="text-xs dim mt-1 space-y-0.5">
+              {totals.notCash > 0 && (
+                <p>
+                  <b>AED {totals.notCash.toLocaleString()}</b> of this was card or bank transfer. That money went
+                  straight to the account — it was never cash in hand and must not be looked for in the bag.
+                </p>
+              )}
+              <p>Cash that should have been in hand across these days: AED {totals.inHand.toLocaleString()}.</p>
+              {totals.toRecover > 0 && (
+                <p>Still owed by riders and not counted above: AED {totals.toRecover.toLocaleString()}.</p>
+              )}
+            </div>
           </div>
         </div>
       )}
