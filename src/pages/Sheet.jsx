@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { todayISO, fmt } from '../lib/dates'
+import { monthStartISO } from '../lib/dates'
 import { monthKey, monthRange, monthLabel } from '../lib/month'
 import { cashbox } from '../lib/cashbox'
 
@@ -46,7 +47,11 @@ export default function Sheet() {
   const [params, setParams] = useSearchParams()
   const month = params.get('month') || monthKey()
   const day = params.get('day') || ''
-  const scope = day ? 'day' : 'month'
+  // The collection round runs across days — 5 to 10 — and the report that goes
+  // to the owner is for the round, not for a calendar month.
+  const fromP = params.get('from') || ''
+  const toP = params.get('to') || ''
+  const scope = fromP && toP ? 'range' : day ? 'day' : 'month'
 
   const [takings, setTakings] = useState([])
   const [subs, setSubs] = useState([])
@@ -56,10 +61,11 @@ export default function Sheet() {
   const [openDebts, setOpen] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const { start, end } = useMemo(
-    () => (day ? { start: day, end: day } : monthRange(month)),
-    [day, month],
-  )
+  const { start, end } = useMemo(() => {
+    if (scope === 'range') return fromP <= toP ? { start: fromP, end: toP } : { start: toP, end: fromP }
+    if (scope === 'day') return { start: day, end: day }
+    return monthRange(month)
+  }, [scope, fromP, toP, day, month])
 
   useEffect(() => {
     setLoading(true)
@@ -138,31 +144,67 @@ export default function Sheet() {
   }, [lines, takings, subs, onetime, expenses, pending, debts, day, start])
 
   const carName = (id) => cars.find((c) => c.id === id)?.name || ''
-  const title = scope === 'day' ? fmt(day) : monthLabel(month)
+  const title =
+    scope === 'day' ? fmt(day) : scope === 'range' ? `${fmt(start)} — ${fmt(end)}` : monthLabel(month)
+  const periodText = scope === 'day' ? fmt(day) : `${fmt(start)} — ${fmt(end)}`
+  const dayCount = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
 
   return (
     <div className="space-y-5">
-      <div className="no-print flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="h1">Sheet</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setParams({ day: todayISO() })}
-            className={`pill ${scope === 'day' ? 'pill-on' : ''}`}
-          >
-            Today
-          </button>
-          <button onClick={() => setParams({ month: monthKey() })} className={`pill ${scope === 'month' ? 'pill-on' : ''}`}>
-            This month
-          </button>
+      <div className="no-print space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h1 className="h1">Sheet</h1>
           <button onClick={() => window.print()} className="btn-primary px-4">
             🖨 Save as PDF
           </button>
         </div>
-      </div>
 
-      <p className="no-print text-xs dim">
-        Print opens your phone's own dialog — choose <b>Save as PDF</b> as the printer to keep a copy.
-      </p>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setParams({ day: todayISO() })} className={`pill ${scope === 'day' ? 'pill-on' : ''}`}>
+            Today
+          </button>
+          <button
+            onClick={() => setParams({ month: monthKey() })}
+            className={`pill ${scope === 'month' ? 'pill-on' : ''}`}
+          >
+            This month
+          </button>
+          <button
+            onClick={() => setParams({ from: monthStartISO().slice(0, 8) + '05', to: monthStartISO().slice(0, 8) + '10' })}
+            className={`pill ${scope === 'range' ? 'pill-on' : ''}`}
+          >
+            Collection round 5–10
+          </button>
+        </div>
+
+        {/* Any two dates, because a round can slip and the report still has to
+            cover exactly the days it happened on. */}
+        <div className="card flex items-end gap-2 flex-wrap">
+          <div>
+            <label className="label">From</label>
+            <input
+              className="input w-auto"
+              type="date"
+              value={start}
+              onChange={(e) => setParams({ from: e.target.value, to: end })}
+            />
+          </div>
+          <div>
+            <label className="label">To</label>
+            <input
+              className="input w-auto"
+              type="date"
+              value={end}
+              onChange={(e) => setParams({ from: start, to: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <p className="text-xs dim">
+          Print opens your phone's own dialog — choose <b>Save as PDF</b> as the printer. Page 1 is the summary for
+          the boss, page 2 is the list of who paid.
+        </p>
+      </div>
 
       {loading ? (
         <div className="skeleton h-64" />
@@ -170,26 +212,27 @@ export default function Sheet() {
         <div className="stmt">
           <header className="stmt-head">
             <div>
-              <div className="stmt-brand">ADNAN CAR LIFT</div>
-              <div className="stmt-sub">Staff Transport · Dubai</div>
+              <div className="stmt-brand">Adnan Car Lift</div>
+              <div className="stmt-sub">Staff Transport Services · Dubai, UAE</div>
             </div>
             <div className="stmt-meta">
+              <span className="stmt-doctype">Collection Statement</span>
               <div>
-                <span>Statement</span>
-                <b>{scope === 'day' ? 'One day' : 'Full month'}</b>
+                <span className="lbl">Period</span>
+                <b>{periodText}</b>
               </div>
               <div>
-                <span>Period</span>
-                <b>{scope === 'day' ? fmt(day) : `${fmt(start)} — ${fmt(end)}`}</b>
+                <span className="lbl">Days</span>
+                <b>{dayCount}</b>
               </div>
               <div>
-                <span>Printed</span>
+                <span className="lbl">Issued</span>
                 <b>{fmt(todayISO())}</b>
               </div>
             </div>
           </header>
 
-          <h2 className="stmt-title">Earnings — {title}</h2>
+          <h2 className="stmt-title">Summary — {title}</h2>
 
           {/* Three numbers, in the order the question is actually asked:
               what came in, what went out, what is left. */}
@@ -289,8 +332,28 @@ export default function Sheet() {
             </section>
           )}
 
-          <section className="stmt-sec">
-            <h3>Riders — full list ({lines.length})</h3>
+          {/* Signed on the summary page — that is the page that goes with the
+              money, and the one the owner keeps. */}
+          <div className="stmt-sign">
+            <div>Prepared by — Faiz</div>
+            <div>Received by</div>
+          </div>
+
+          <section className="stmt-sec stmt-page2">
+            <header className="stmt-head">
+              <div>
+                <div className="stmt-brand">Adnan Car Lift</div>
+                <div className="stmt-sub">Staff Transport Services · Dubai, UAE</div>
+              </div>
+              <div className="stmt-meta">
+                <span className="stmt-doctype">Rider Detail</span>
+                <div>
+                  <span className="lbl">Period</span>
+                  <b>{periodText}</b>
+                </div>
+              </div>
+            </header>
+            <h3 style={{ marginTop: '1.25rem' }}>Who paid ({lines.length})</h3>
             <Row cells={['Name', scope === 'day' ? 'Car' : 'Date · Car', 'Paid by', 'Paid', 'Owes']} cols={RIDER_COLS} rightFrom={3} kind="head" />
             {lines.map((l) => (
               <Row
@@ -309,11 +372,6 @@ export default function Sheet() {
             {lines.length === 0 && <p className="stmt-note">No riders were written in this period.</p>}
             <Row cells={['TOTAL', '', '', aed(totals.collected), '']} cols={RIDER_COLS} rightFrom={3} kind="sum" />
           </section>
-
-          <div className="stmt-sign">
-            <div>Prepared by</div>
-            <div>Received by</div>
-          </div>
         </div>
       )}
     </div>

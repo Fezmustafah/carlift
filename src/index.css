@@ -335,36 +335,70 @@ body {
   align-items: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
-  padding-bottom: 0.75rem;
-  border-bottom: 3px solid var(--brand);
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--ink);
+  /* The double rule is what makes a page read as letterhead rather than as a
+     heading someone forgot to style. */
+  box-shadow: 0 4px 0 -1px var(--ink);
+  margin-bottom: 0.5rem;
 }
 
+/* No vw units: printing computes them against the paper box, which shrinks the
+   wordmark to nothing on the very page it exists for. */
 .stmt-brand {
-  font-size: clamp(1.6rem, 6vw, 2.2rem);
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
   line-height: 1.05;
-  color: var(--brand);
+  text-transform: uppercase;
+  color: var(--ink);
+}
+@media (max-width: 520px) {
+  .stmt-brand {
+    font-size: 1.5rem;
+    letter-spacing: 0.04em;
+  }
 }
 
 .stmt-sub {
-  font-size: 0.85rem;
-  letter-spacing: 0.14em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-top: 0.15rem;
+  margin-top: 0.3rem;
 }
 
 .stmt-meta {
   text-align: right;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
-.stmt-meta span {
+.stmt-meta .lbl {
   color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
 }
 .stmt-meta b {
-  margin-left: 0.5rem;
+  margin-left: 0.6rem;
+  font-variant-numeric: tabular-nums;
+}
+.stmt-doctype {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--ink);
+}
+
+/* Page two: who paid. Kept off the summary the owner reads first. */
+.stmt-page2 {
+  break-before: page;
+  page-break-before: always;
+  margin-top: 2rem;
 }
 
 .stmt-title {
@@ -474,16 +508,34 @@ body {
   .stmt {
     --ink: #000000;
     --rule: #000000;
+    font-size: 11pt;
+    color: #000000;
+  }
+  /* Point sizes, because the wordmark's job is to be unmissable on paper. */
+  .stmt-brand {
+    font-size: 26pt;
+    color: #000000;
+  }
+  .stmt-sub {
+    font-size: 8pt;
+    color: #333333;
+  }
+  .stmt-doctype {
+    font-size: 11pt;
+    color: #000000;
+  }
+  .stmt-head {
+    border-color: #000000;
+    box-shadow: 0 4px 0 -1px #000000;
+  }
+  .stmt-title {
     font-size: 12pt;
   }
-  .stmt-brand,
-  .stmt-head {
-    color: #000000;
-    border-color: #000000;
+  .stmt-hero .v {
+    font-size: 20pt;
   }
-  .stmt-sub,
-  .stmt-meta span,
   .stmt-hero .k,
+  .stmt-meta .lbl,
   .stmt-note,
   .stmt-row.head,
   .stmt-sign div {
@@ -495,9 +547,13 @@ body {
   }
   .stmt-row {
     border-bottom-color: #999999;
-    padding: 0.35rem 0;
+    padding: 0.3rem 0;
   }
   .stmt-sec {
     margin-top: 1.1rem;
+  }
+  /* A table split across a page boundary is a table nobody trusts. */
+  .stmt-row {
+    break-inside: avoid;
   }
 }
