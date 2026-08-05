@@ -336,6 +336,24 @@ export default function Fast() {
       </div>
 
       <div className="card space-y-3">
+        {/* The method stays where it was left, which is right for a run of card
+            payments and dangerous for the cash rider who follows them. Silence
+            is what makes it dangerous, so it does not stay silent. */}
+        {method !== 'cash' && (
+          <div
+            className="rounded-xl p-2.5 text-sm font-semibold flex items-center gap-2"
+            style={{ background: 'var(--warn-soft)', color: 'var(--warn)' }}
+          >
+            <span>{method === 'card' ? '💳' : '🏦'}</span>
+            <span className="flex-1">
+              Writing every rider as {method.toUpperCase()} — not cash. This money is not in your bag.
+            </span>
+            <button onClick={() => setMethod('cash')} className="btn-ghost px-2 py-1 text-xs shrink-0">
+              Back to cash
+            </button>
+          </div>
+        )}
+
         <input
           ref={nameRef}
           className="input text-lg"
