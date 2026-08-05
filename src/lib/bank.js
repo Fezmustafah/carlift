@@ -24,7 +24,9 @@ export function ibanValid(iban = bank.iban) {
   return rem === 1
 }
 
-// Lines for a WhatsApp message.
+// Lines for a WhatsApp message. The account number is deliberately left out:
+// riders were pasting it into their banking app instead of the IBAN, where it
+// finds nothing at all. One number to copy means one number to get right.
 export function bankLines() {
   if (!hasBank) return []
   return [
@@ -32,7 +34,9 @@ export function bankLines() {
     bank.name ? `Bank: ${bank.name}` : null,
     bank.accountName ? `Account name: ${bank.accountName}` : null,
     `IBAN: ${bank.iban}`,
-    bank.accountNumber ? `Account number: ${bank.accountNumber}` : null,
+    bank.accountName
+      ? `Paste the IBAN only. Your app must show ${bank.accountName} — no name means the wrong number.`
+      : 'Paste the IBAN only.',
     'After transfer, send the screenshot to this number.',
   ].filter(Boolean)
 }

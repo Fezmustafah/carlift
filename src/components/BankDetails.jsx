@@ -58,9 +58,37 @@ export default function BankDetails({ compact }) {
         </div>
       )}
 
-      <CopyLine label={`IBAN — ${bank.iban.length} characters, no spaces`} value={bank.iban} />
-      {bank.accountNumber && <CopyLine label="Account number" value={bank.accountNumber} />}
-      {!compact && bank.swift && <CopyLine label="SWIFT (from outside UAE)" value={bank.swift} />}
+      {/* The IBAN is the only number a UAE banking app can look a beneficiary
+          up with. Riders were copying the account number instead — it pastes
+          fine and then simply never finds anybody — so it is no longer offered
+          beside the IBAN as if the two were interchangeable. */}
+      <div className="rounded-2xl p-3" style={{ border: '2px solid var(--brand)' }}>
+        <CopyLine label={`IBAN — copy this one (${bank.iban.length} characters)`} value={bank.iban} />
+      </div>
+
+      <p className="text-sm">
+        After pasting, your app must show the name{' '}
+        <b>{bank.accountName || 'the office account'}</b>. No name means you pasted the wrong number — go back and
+        copy the IBAN above.
+        <br />
+        <span className="muted">
+          Pagkatapos i-paste, dapat lumabas ang pangalan. Kung walang pangalan, mali po ang na-copy niyo — ang IBAN po
+          ang kopyahin.
+        </span>
+      </p>
+
+      {!compact && (bank.accountNumber || bank.swift) && (
+        <details>
+          <summary className="text-xs dim cursor-pointer">Other numbers — not for transfers</summary>
+          <div className="pt-2 space-y-2">
+            {bank.accountNumber && <CopyLine label="Account number — for a cash deposit at ADCB only" value={bank.accountNumber} />}
+            {bank.swift && <CopyLine label="SWIFT — only from outside the UAE" value={bank.swift} />}
+            <p className="text-xs" style={{ color: 'var(--warn)' }}>
+              Do not use these to send money from a UAE app. They will not find the account. Use the IBAN.
+            </p>
+          </div>
+        </details>
+      )}
 
       <p className="text-xs dim">
         Use the Copy button. Do not type spaces in the IBAN — the bank form counts them.
