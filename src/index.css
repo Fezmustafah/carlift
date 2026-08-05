@@ -318,3 +318,186 @@ body {
     page-break-after: auto;
   }
 }
+
+/* --- statement (the month/day sheet given to the owner) ------------- */
+/* Read on paper, by someone who is not going to squint or scroll. Big
+   numbers, plain words, ruled lines, nothing that needs interpreting. */
+
+.stmt {
+  --ink: var(--text);
+  --rule: var(--border-strong);
+  color: var(--ink);
+}
+
+.stmt-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.75rem;
+  border-bottom: 3px solid var(--brand);
+}
+
+.stmt-brand {
+  font-size: clamp(1.6rem, 6vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  color: var(--brand);
+}
+
+.stmt-sub {
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.stmt-meta {
+  text-align: right;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.stmt-meta span {
+  color: var(--muted);
+}
+.stmt-meta b {
+  margin-left: 0.5rem;
+}
+
+.stmt-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 1.25rem 0 0.75rem;
+}
+
+/* The three numbers the owner actually opens the page for. */
+.stmt-hero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+@media (max-width: 520px) {
+  .stmt-hero {
+    grid-template-columns: 1fr;
+  }
+}
+.stmt-hero > div {
+  border: 2px solid var(--rule);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+}
+.stmt-hero .k {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stmt-hero .v {
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  margin-top: 0.15rem;
+}
+.stmt-hero .net {
+  border-color: var(--brand);
+  border-width: 3px;
+}
+
+.stmt-sec {
+  margin-top: 1.5rem;
+  break-inside: avoid;
+}
+.stmt-sec h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 2px solid var(--rule);
+}
+
+.stmt-row {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+.stmt-row.head {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom-width: 2px;
+  border-bottom-color: var(--rule);
+}
+.stmt-row.sum {
+  font-weight: 800;
+  font-size: 1.05rem;
+  border-bottom: none;
+  border-top: 2px solid var(--rule);
+}
+.stmt-row .r {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stmt-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+.stmt-sign {
+  margin-top: 2.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  break-inside: avoid;
+}
+.stmt-sign div {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+@media print {
+  /* Paper is white and ink is black, whatever the phone's theme was. */
+  .stmt {
+    --ink: #000000;
+    --rule: #000000;
+    font-size: 12pt;
+  }
+  .stmt-brand,
+  .stmt-head {
+    color: #000000;
+    border-color: #000000;
+  }
+  .stmt-sub,
+  .stmt-meta span,
+  .stmt-hero .k,
+  .stmt-note,
+  .stmt-row.head,
+  .stmt-sign div {
+    color: #333333;
+  }
+  .stmt-hero > div,
+  .stmt-hero .net {
+    border-color: #000000;
+  }
+  .stmt-row {
+    border-bottom-color: #999999;
+    padding: 0.35rem 0;
+  }
+  .stmt-sec {
+    margin-top: 1.1rem;
+  }
+}

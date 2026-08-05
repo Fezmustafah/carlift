@@ -21,14 +21,14 @@ const readOutbox = () => {
   }
 }
 
-function Row({ cells, bold, cols = '1.6fr 1fr 0.8fr 0.8fr', rightFrom = 2 }) {
+// One ruled line of the statement. `kind` is head / normal / sum, which is the
+// whole visual vocabulary of the page — a reader should never have to work out
+// what a line is.
+function Row({ cells, cols, kind = '', rightFrom = 2 }) {
   return (
-    <div
-      className="grid gap-2 py-1.5 text-sm divide-row"
-      style={{ gridTemplateColumns: cols, fontWeight: bold ? 700 : 400 }}
-    >
+    <div className={`stmt-row ${kind}`} style={{ gridTemplateColumns: cols }}>
       {cells.map((c, i) => (
-        <span key={i} className={i >= rightFrom ? 'text-right' : 'truncate'}>
+        <span key={i} className={i >= rightFrom ? 'r' : ''}>
           {c}
         </span>
       ))}
@@ -36,8 +36,11 @@ function Row({ cells, bold, cols = '1.6fr 1fr 0.8fr 0.8fr', rightFrom = 2 }) {
   )
 }
 
-const RIDER_COLS = '1.5fr 0.9fr 0.7fr 0.7fr 0.7fr'
+const RIDER_COLS = '1.6fr 1fr 0.7fr 0.8fr 0.8fr'
+const RIDER_COLS_DEBT = '1.8fr 1.2fr 0.8fr 0.9fr'
+const MONEY_COLS = '2fr 1fr'
 const METHOD_LABEL = { cash: 'Cash', card: 'CARD', transfer: 'BANK' }
+const aed = (n) => Number(n || 0).toLocaleString('en-AE', { minimumFractionDigits: 0 })
 
 export default function Sheet() {
   const [params, setParams] = useSearchParams()
@@ -164,146 +167,152 @@ export default function Sheet() {
       {loading ? (
         <div className="skeleton h-64" />
       ) : (
-        <div className="space-y-5">
-          <div>
-            <h2 className="text-xl font-bold">Car Lift — {title}</h2>
-            <p className="text-sm muted">
-              {scope === 'day' ? fmt(day) : `${fmt(start)} → ${fmt(end)}`} · printed {fmt(todayISO())}
-            </p>
+        <div className="stmt">
+          <header className="stmt-head">
+            <div>
+              <div className="stmt-brand">ADNAN CAR LIFT</div>
+              <div className="stmt-sub">Staff Transport · Dubai</div>
+            </div>
+            <div className="stmt-meta">
+              <div>
+                <span>Statement</span>
+                <b>{scope === 'day' ? 'One day' : 'Full month'}</b>
+              </div>
+              <div>
+                <span>Period</span>
+                <b>{scope === 'day' ? fmt(day) : `${fmt(start)} — ${fmt(end)}`}</b>
+              </div>
+              <div>
+                <span>Printed</span>
+                <b>{fmt(todayISO())}</b>
+              </div>
+            </div>
+          </header>
+
+          <h2 className="stmt-title">Earnings — {title}</h2>
+
+          {/* Three numbers, in the order the question is actually asked:
+              what came in, what went out, what is left. */}
+          <div className="stmt-hero">
+            <div>
+              <div className="k">Total collected</div>
+              <div className="v">{aed(totals.collected + totals.rides)}</div>
+            </div>
+            <div>
+              <div className="k">Total expenses</div>
+              <div className="v">{aed(totals.spent)}</div>
+            </div>
+            <div className="net">
+              <div className="k">Net earnings</div>
+              <div className="v">{aed(totals.net)}</div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="card">
-              <div className="text-sm muted">Collected</div>
-              <div className="text-2xl font-bold" style={{ color: 'var(--ok)' }}>
-                {totals.collected.toLocaleString()}
-              </div>
-              <div className="text-xs dim">
-                {lines.length} riders
-                {totals.notCash > 0 ? ` · ${totals.cash.toLocaleString()} cash + ${totals.notCash.toLocaleString()} card/bank` : ''}
-              </div>
-            </div>
-            <div className="card">
-              <div className="text-sm muted">Spent</div>
-              <div className="text-2xl font-bold" style={{ color: 'var(--bad)' }}>
-                {totals.spent.toLocaleString()}
-              </div>
-              <div className="text-xs dim">{expenses.length} payments out</div>
-            </div>
-            <div className="card">
-              <div className="text-sm muted">Net</div>
-              <div className="text-2xl font-bold">{totals.net.toLocaleString()}</div>
-              {totals.rides > 0 && <div className="text-xs dim">incl. {totals.rides.toLocaleString()} one-time</div>}
-            </div>
-            <div className="card">
-              <div className="text-sm muted">Still to recover</div>
-              <div className="text-2xl font-bold" style={{ color: 'var(--warn)' }}>
-                {totals.toRecover.toLocaleString()}
-              </div>
-              <div className="text-xs dim">
-                {debts.length} rider{debts.length === 1 ? '' : 's'} owe{debts.length === 1 ? 's' : ''}
-              </div>
-            </div>
-          </div>
+          <section className="stmt-sec">
+            <h3>Money collected</h3>
+            <Row cells={['Cash collected from riders', aed(totals.cash)]} cols={MONEY_COLS} rightFrom={1} />
+            {totals.card > 0 && (
+              <Row cells={['Card payments', aed(totals.card)]} cols={MONEY_COLS} rightFrom={1} />
+            )}
+            {totals.transfer > 0 && (
+              <Row cells={['Bank transfers', aed(totals.transfer)]} cols={MONEY_COLS} rightFrom={1} />
+            )}
+            {totals.rides > 0 && (
+              <Row cells={['One-time riders (cash)', aed(totals.rides)]} cols={MONEY_COLS} rightFrom={1} />
+            )}
+            <Row
+              cells={['TOTAL COLLECTED', aed(totals.collected + totals.rides)]}
+              cols={MONEY_COLS}
+              rightFrom={1}
+              kind="sum"
+            />
+            {totals.notCash > 0 && (
+              <p className="stmt-note">
+                Of this, <b>AED {aed(totals.notCash)}</b> was paid by card or bank transfer. That money went straight
+                into the bank account. It was never cash in hand, so it is not in the money counted at the end of the
+                day.
+              </p>
+            )}
+          </section>
 
-          <div>
-            <h3 className="h2 mb-1">Riders</h3>
-            <div className="card">
-              <Row cells={['Name', 'Car', 'How', 'Paid', 'Owes']} bold cols={RIDER_COLS} rightFrom={3} />
-              {lines.map((l) => (
-                <Row
-                  key={l.id}
-                  cols={RIDER_COLS}
-                  rightFrom={3}
-                  cells={[
-                    l.name + (l._pending ? ' (not sent)' : ''),
-                    scope === 'day' ? carName(l.car_id) : `${fmt(l.taken_on)} ${carName(l.car_id)}`,
-                    METHOD_LABEL[l.method || 'cash'] || l.method,
-                    Number(l.amount).toLocaleString(),
-                    Number(l.owed) > 0 ? Number(l.owed).toLocaleString() : '',
-                  ]}
-                />
-              ))}
-              {lines.length === 0 && <p className="muted text-sm py-3">Nobody written in this period.</p>}
+          <section className="stmt-sec">
+            <h3>Expenses paid out</h3>
+            <Row cells={['What it was for', 'Date', 'Amount']} cols="2fr 1fr 1fr" rightFrom={2} kind="head" />
+            {expenses.map((e) => (
               <Row
-                cells={['Total', '', '', totals.collected.toLocaleString(), '']}
-                bold
-                cols={RIDER_COLS}
-                rightFrom={3}
+                key={e.id}
+                cols="2fr 1fr 1fr"
+                rightFrom={2}
+                cells={[
+                  `${e.category}${e.note ? ` — ${e.note}` : ''}${carName(e.car_id) ? ` (${carName(e.car_id)})` : ''}`,
+                  fmt(e.date),
+                  aed(e.amount),
+                ]}
               />
-            </div>
-          </div>
+            ))}
+            {expenses.length === 0 && <p className="stmt-note">Nothing was paid out in this period.</p>}
+            <Row cells={['TOTAL EXPENSES', '', aed(totals.spent)]} cols="2fr 1fr 1fr" rightFrom={2} kind="sum" />
+          </section>
 
-          <div>
-            <h3 className="h2 mb-1">Paid out</h3>
-            <div className="card">
-              <Row cells={['What', 'Car', 'Amount', '']} bold />
-              {expenses.map((e) => (
-                <Row
-                  key={e.id}
-                  cells={[
-                    `${e.category}${e.note ? ` — ${e.note}` : ''}`,
-                    `${fmt(e.date)} ${carName(e.car_id)}`,
-                    Number(e.amount).toLocaleString(),
-                    '',
-                  ]}
-                />
-              ))}
-              {expenses.length === 0 && <p className="muted text-sm py-3">Nothing paid out in this period.</p>}
-              <Row cells={['Total', '', totals.spent.toLocaleString(), '']} bold />
-            </div>
-          </div>
+          <section className="stmt-sec">
+            <h3>Net earnings</h3>
+            <Row cells={['Total collected', aed(totals.collected + totals.rides)]} cols={MONEY_COLS} rightFrom={1} />
+            <Row cells={['Less expenses paid out', `− ${aed(totals.spent)}`]} cols={MONEY_COLS} rightFrom={1} />
+            <Row cells={['NET EARNINGS', aed(totals.net)]} cols={MONEY_COLS} rightFrom={1} kind="sum" />
+            <p className="stmt-note">
+              Cash that should have been in hand across these days: <b>AED {aed(totals.inHand)}</b>.
+            </p>
+          </section>
 
           {debts.length > 0 && (
-            <div>
-              <h3 className="h2 mb-1">Still to recover</h3>
-              <div className="card">
-                <Row cells={['Name', 'Since', 'Paid', 'Owes']} bold />
-                {debts.map((l) => (
-                  <Row
-                    key={l.id}
-                    cells={[
-                      l.name + (l.phone ? ` · ${l.phone}` : ''),
-                      `${fmt(l.taken_on)} ${carName(l.car_id)}`,
-                      Number(l.amount).toLocaleString(),
-                      Number(l.owed).toLocaleString(),
-                    ]}
-                  />
-                ))}
-                <Row cells={['Total', '', '', totals.toRecover.toLocaleString()]} bold />
-              </div>
-              <p className="text-xs dim mt-1">
-                This list is every open balance, not only this period — a promise made in July is still a promise.
+            <section className="stmt-sec">
+              <h3>Still to be recovered</h3>
+              <Row cells={['Rider', 'Since', 'Paid', 'Still owes']} cols={RIDER_COLS_DEBT} rightFrom={2} kind="head" />
+              {debts.map((l) => (
+                <Row
+                  key={l.id}
+                  cols={RIDER_COLS_DEBT}
+                  rightFrom={2}
+                  cells={[
+                    l.name + (l.phone ? ` · ${l.phone}` : ''),
+                    `${fmt(l.taken_on)}${carName(l.car_id) ? ` · ${carName(l.car_id)}` : ''}`,
+                    aed(l.amount),
+                    aed(l.owed),
+                  ]}
+                />
+              ))}
+              <Row cells={['TOTAL TO RECOVER', '', '', aed(totals.toRecover)]} cols={RIDER_COLS_DEBT} rightFrom={2} kind="sum" />
+              <p className="stmt-note">
+                This money has not been received and is <b>not</b> included in the totals above. It is every unpaid
+                balance to date, not only this period.
               </p>
-            </div>
+            </section>
           )}
 
-          {/* The closing statement. Cash and card are both collected money and
-              only one of them was ever in his hand — the sheet has to say which
-              is which, or it reads as a claim to be holding all of it. */}
-          <div>
-            <h3 className="h2 mb-1">How the money came in</h3>
-            <div className="card">
-              <Row cells={['Cash collected', '', totals.cash.toLocaleString(), '']} />
-              {totals.card > 0 && <Row cells={['Card', '', totals.card.toLocaleString(), '']} />}
-              {totals.transfer > 0 && <Row cells={['Bank transfer', '', totals.transfer.toLocaleString(), '']} />}
-              {totals.rides > 0 && <Row cells={['One-time riders (cash)', '', totals.rides.toLocaleString(), '']} />}
-              <Row cells={['Total collected', '', (totals.collected + totals.rides).toLocaleString(), '']} bold />
-              <Row cells={['Paid out', '', `− ${totals.spent.toLocaleString()}`, '']} />
-              <Row cells={['Net', '', totals.net.toLocaleString(), '']} bold />
-            </div>
-            <div className="text-xs dim mt-1 space-y-0.5">
-              {totals.notCash > 0 && (
-                <p>
-                  <b>AED {totals.notCash.toLocaleString()}</b> of this was card or bank transfer. That money went
-                  straight to the account — it was never cash in hand and must not be looked for in the bag.
-                </p>
-              )}
-              <p>Cash that should have been in hand across these days: AED {totals.inHand.toLocaleString()}.</p>
-              {totals.toRecover > 0 && (
-                <p>Still owed by riders and not counted above: AED {totals.toRecover.toLocaleString()}.</p>
-              )}
-            </div>
+          <section className="stmt-sec">
+            <h3>Riders — full list ({lines.length})</h3>
+            <Row cells={['Name', scope === 'day' ? 'Car' : 'Date · Car', 'Paid by', 'Paid', 'Owes']} cols={RIDER_COLS} rightFrom={3} kind="head" />
+            {lines.map((l) => (
+              <Row
+                key={l.id}
+                cols={RIDER_COLS}
+                rightFrom={3}
+                cells={[
+                  l.name + (l._pending ? ' (not sent)' : ''),
+                  scope === 'day' ? carName(l.car_id) : `${fmt(l.taken_on)}${carName(l.car_id) ? ` · ${carName(l.car_id)}` : ''}`,
+                  METHOD_LABEL[l.method || 'cash'] || l.method,
+                  aed(l.amount),
+                  Number(l.owed) > 0 ? aed(l.owed) : '—',
+                ]}
+              />
+            ))}
+            {lines.length === 0 && <p className="stmt-note">No riders were written in this period.</p>}
+            <Row cells={['TOTAL', '', '', aed(totals.collected), '']} cols={RIDER_COLS} rightFrom={3} kind="sum" />
+          </section>
+
+          <div className="stmt-sign">
+            <div>Prepared by</div>
+            <div>Received by</div>
           </div>
         </div>
       )}
