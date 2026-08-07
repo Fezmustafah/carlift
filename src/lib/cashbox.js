@@ -53,6 +53,27 @@ export function cashbox({ day, takings = [], subs = [], onetime = [], expenses =
   }
 }
 
+// The same count over a stretch of days — a collection round, a month. Days
+// with nothing in them are skipped, so an empty week cannot drag a total.
+// Every rule above still applies, day by day, which is the only way the round
+// total and the day totals can agree.
+export function cashboxRange({ from, to, takings = [], subs = [], onetime = [], expenses = [], pending = [] }) {
+  const within = (d) => d && (!from || d >= from) && (!to || d <= to)
+  const days = new Set()
+  for (const t of takings) if (within(t.taken_on)) days.add(t.taken_on)
+  for (const p of pending) if (within(p.taken_on)) days.add(p.taken_on)
+  for (const o of onetime) if (within(o.date)) days.add(o.date)
+  for (const e of expenses) if (within(e.date)) days.add(e.date)
+  for (const s of subs) if (within(dayOf(s.created_at))) days.add(dayOf(s.created_at))
+
+  const total = { fast: 0, unsentCash: 0, payments: 0, rides: 0, spent: 0, expected: 0, notInHand: 0, riders: 0, unsent: 0 }
+  for (const day of days) {
+    const box = cashbox({ day, takings, subs, onetime, expenses, pending })
+    for (const k of Object.keys(total)) total[k] += box[k]
+  }
+  return { ...total, days: [...days].sort() }
+}
+
 // null while the box is empty — an uncounted day is not a day that balances.
 export function difference(expected, counted) {
   if (counted === '' || counted === null || counted === undefined) return null

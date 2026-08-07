@@ -4,12 +4,18 @@ import { supabase } from '../lib/supabase'
 import { todayISO, fmt } from '../lib/dates'
 import { monthStartISO } from '../lib/dates'
 import { monthKey, monthRange, monthLabel } from '../lib/month'
-import { cashbox } from '../lib/cashbox'
+import { cashboxRange } from '../lib/cashbox'
+import { registerLines, splitByMethod, byCar } from '../lib/register'
+import Letterhead, { COMPANY } from '../components/Letterhead'
 
-// A sheet of paper. One day or one month: every rider, every rupee out, what is
-// left and what is still owed. The browser's own print dialog turns it into a
-// PDF, which is why there is no PDF library here — one less thing to break on a
-// phone at six in the morning.
+// The statement. One day, one round, or one month of the register, printed
+// under the company letterhead for the owner.
+//
+// It answers, in this order and in these words: what came in, what is in the
+// hand right now, what is in the bank, what went out, what is left, and who
+// paid. The browser's own print dialog turns it into a PDF, which is why there
+// is no PDF library here — one less thing to break on a phone at six in the
+// morning.
 
 const OUTBOX_KEY = 'carlift.fast.outbox'
 
@@ -39,6 +45,8 @@ function Row({ cells, cols, kind = '', rightFrom = 2 }) {
 
 const RIDER_COLS = '1.6fr 1fr 0.7fr 0.8fr 0.8fr'
 const RIDER_COLS_DEBT = '1.8fr 1.2fr 0.8fr 0.9fr'
+const CAR_COLS = '1.6fr 0.7fr 0.9fr 0.9fr 0.9fr'
+const DAY_COLS = '1.2fr 0.7fr 0.9fr 0.9fr 0.9fr'
 const MONEY_COLS = '2fr 1fr'
 const METHOD_LABEL = { cash: 'Cash', card: 'CARD', transfer: 'BANK' }
 const aed = (n) => Number(n || 0).toLocaleString('en-AE', { minimumFractionDigits: 0 })
@@ -71,12 +79,17 @@ export default function Sheet() {
     setLoading(true)
     Promise.all([
       supabase.from('takings').select('*').gte('taken_on', start).lte('taken_on', end).order('taken_on'),
-      supabase.from('subscriptions').select('id, amount, paid_via, created_at').gte('created_at', start),
+      supabase
+        .from('subscriptions')
+        .select('id, amount, paid_via, created_at')
+        .gte('created_at', start)
+        .lte('created_at', `${end}T23:59:59`),
       supabase.from('onetime_rides').select('*').gte('date', start).lte('date', end),
       supabase.from('expenses').select('*').gte('date', start).lte('date', end).order('date'),
       supabase.from('cars').select('id, name, driver_name').order('name'),
       // Debts do not expire at the end of a month: anything still open belongs
-      // on the sheet whichever day it was promised.
+      // on the sheet whichever day it was promised. Missing column (the owed
+      // migration not run yet) simply means there is nothing to show.
       supabase.from('takings').select('*').gt('owed', 0).order('taken_on'),
     ]).then(([t, s, o, e, c, owed]) => {
       setTakings(t.data || [])
@@ -103,57 +116,73 @@ export default function Sheet() {
   )
 
   const lines = useMemo(
-    () =>
-      [...pending.map((p) => ({ ...p, _pending: true })), ...takings].sort((a, b) =>
-        String(a.taken_on).localeCompare(String(b.taken_on)),
-      ),
-    [pending, takings],
+    () => registerLines({ takings, pending, from: start, to: end }),
+    [takings, pending, start, end],
   )
 
   const totals = useMemo(() => {
-    const days = [...new Set(lines.map((l) => l.taken_on))]
-    if (!days.length) days.push(day || start)
-    let inHand = 0
-    for (const d of days) inHand += cashbox({ day: d, takings, subs, onetime, expenses, pending }).expected
-    const collected = lines.reduce((t, l) => t + Number(l.amount), 0)
-    const spent = expenses.reduce((t, e) => t + Number(e.amount), 0)
-    const toRecover = debts.reduce((t, l) => t + Number(l.owed), 0)
+    const money = splitByMethod(lines)
     const rides = onetime.reduce((t, o) => t + Number(o.amount), 0)
+    const spent = expenses.reduce((t, e) => t + Number(e.amount), 0)
 
-    // Split by how it was paid. Cash is what passed through his hands; card and
-    // bank went to the account without ever being in the bag, and a sheet that
-    // does not say so reads as if he is holding all of it.
-    const by = (m) =>
-      lines.filter((l) => (l.method || 'cash') === m).reduce((t, l) => t + Number(l.amount), 0)
-    const cash = by('cash')
-    const card = by('card')
-    const transfer = by('transfer')
+    // A taking that was put on a rider's record exists twice — as the taking
+    // and as the subscription it created. The subscription is the copy.
+    const copies = new Set(takings.map((t) => t.subscription_id).filter(Boolean))
+    const subMoney = splitByMethod(
+      subs.filter((s) => !copies.has(s.id)).map((s) => ({ amount: s.amount, method: s.paid_via })),
+    )
+
+    // Cash is what passed through his hands; card and bank went to the account
+    // without ever being in the bag, and a sheet that does not say so reads as
+    // if he is holding the lot.
+    const cash = money.cash + rides + subMoney.cash
+    const card = money.card + subMoney.card
+    const transfer = money.transfer + subMoney.transfer
+    const collected = cash + card + transfer
+
+    const box = cashboxRange({ from: start, to: end, takings, subs, onetime, expenses, pending })
 
     return {
       collected,
-      spent,
-      inHand,
-      toRecover,
-      rides,
       cash,
       card,
       transfer,
       notCash: card + transfer,
-      net: collected + rides - spent,
+      rides,
+      onCollect: subMoney.total,
+      spent,
+      inHand: box.expected,
+      toRecover: debts.reduce((t, l) => t + Number(l.owed), 0),
+      net: collected - spent,
+      cars: byCar(lines, cars),
     }
-  }, [lines, takings, subs, onetime, expenses, pending, debts, day, start])
+  }, [lines, takings, subs, onetime, expenses, pending, debts, cars, start, end])
+
+  // Day by day, for a round that ran across several mornings.
+  const days = useMemo(() => {
+    const keys = [...new Set(lines.map((l) => l.taken_on))].sort()
+    return keys.map((d) => {
+      const rows = lines.filter((l) => l.taken_on === d)
+      return { day: d, riders: rows.length, ...splitByMethod(rows) }
+    })
+  }, [lines])
 
   const carName = (id) => cars.find((c) => c.id === id)?.name || ''
   const title =
     scope === 'day' ? fmt(day) : scope === 'range' ? `${fmt(start)} — ${fmt(end)}` : monthLabel(month)
   const periodText = scope === 'day' ? fmt(day) : `${fmt(start)} — ${fmt(end)}`
   const dayCount = Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+  const meta = [
+    ['Period', periodText],
+    dayCount > 1 && ['Days', String(dayCount)],
+    ['Issued', fmt(todayISO())],
+  ]
 
   return (
     <div className="space-y-5">
       <div className="no-print space-y-3">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h1 className="h1">Sheet</h1>
+          <h1 className="h1">Statement</h1>
           <button onClick={() => window.print()} className="btn-primary px-4">
             🖨 Save as PDF
           </button>
@@ -210,27 +239,7 @@ export default function Sheet() {
         <div className="skeleton h-64" />
       ) : (
         <div className="stmt">
-          <header className="stmt-head">
-            <div>
-              <div className="stmt-brand">Adnan Car Lift</div>
-              <div className="stmt-sub">Staff Transport Services · Dubai, UAE</div>
-            </div>
-            <div className="stmt-meta">
-              <span className="stmt-doctype">Collection Statement</span>
-              <div>
-                <span className="lbl">Period</span>
-                <b>{periodText}</b>
-              </div>
-              <div>
-                <span className="lbl">Days</span>
-                <b>{dayCount}</b>
-              </div>
-              <div>
-                <span className="lbl">Issued</span>
-                <b>{fmt(todayISO())}</b>
-              </div>
-            </div>
-          </header>
+          <Letterhead doctype="Collection Statement" meta={meta} />
 
           <h2 className="stmt-title">Summary — {title}</h2>
 
@@ -239,7 +248,7 @@ export default function Sheet() {
           <div className="stmt-hero">
             <div>
               <div className="k">Total collected</div>
-              <div className="v">{aed(totals.collected + totals.rides)}</div>
+              <div className="v">{aed(totals.collected)}</div>
             </div>
             <div>
               <div className="k">Total expenses</div>
@@ -251,8 +260,29 @@ export default function Sheet() {
             </div>
           </div>
 
+          {/* The distinction the whole sheet exists for. */}
+          <div className="stmt-split">
+            <div>
+              <div className="k">Cash in hand</div>
+              <div className="v">AED {aed(totals.inHand)}</div>
+              <div className="s">
+                Cash collected AED {aed(totals.cash)} less AED {aed(totals.spent)} paid out. This is the money that
+                should be counted and handed over.
+              </div>
+            </div>
+            <div>
+              <div className="k">Received in the bank</div>
+              <div className="v">AED {aed(totals.notCash)}</div>
+              <div className="s">
+                {totals.notCash > 0
+                  ? 'Card and bank transfers went straight into the company account. Do not look for this money in the cash.'
+                  : 'No card or bank payments in this period. Everything came in as cash.'}
+              </div>
+            </div>
+          </div>
+
           <section className="stmt-sec">
-            <h3>Money collected</h3>
+            <h3>How the money came in</h3>
             <Row cells={['Cash collected from riders', aed(totals.cash)]} cols={MONEY_COLS} rightFrom={1} />
             {totals.card > 0 && (
               <Row cells={['Card payments', aed(totals.card)]} cols={MONEY_COLS} rightFrom={1} />
@@ -260,22 +290,12 @@ export default function Sheet() {
             {totals.transfer > 0 && (
               <Row cells={['Bank transfers', aed(totals.transfer)]} cols={MONEY_COLS} rightFrom={1} />
             )}
-            {totals.rides > 0 && (
-              <Row cells={['One-time riders (cash)', aed(totals.rides)]} cols={MONEY_COLS} rightFrom={1} />
-            )}
-            <Row
-              cells={['TOTAL COLLECTED', aed(totals.collected + totals.rides)]}
-              cols={MONEY_COLS}
-              rightFrom={1}
-              kind="sum"
-            />
-            {totals.notCash > 0 && (
-              <p className="stmt-note">
-                Of this, <b>AED {aed(totals.notCash)}</b> was paid by card or bank transfer. That money went straight
-                into the bank account. It was never cash in hand, so it is not in the money counted at the end of the
-                day.
-              </p>
-            )}
+            <Row cells={['TOTAL COLLECTED', aed(totals.collected)]} cols={MONEY_COLS} rightFrom={1} kind="sum" />
+            <p className="stmt-note">
+              {lines.length} rider{lines.length === 1 ? '' : 's'} written in the register
+              {totals.rides > 0 ? `, including AED ${aed(totals.rides)} from one-time riders` : ''}
+              {totals.onCollect > 0 ? `, plus AED ${aed(totals.onCollect)} recorded on the Collect screen` : ''}.
+            </p>
           </section>
 
           <section className="stmt-sec">
@@ -299,13 +319,30 @@ export default function Sheet() {
 
           <section className="stmt-sec">
             <h3>Net earnings</h3>
-            <Row cells={['Total collected', aed(totals.collected + totals.rides)]} cols={MONEY_COLS} rightFrom={1} />
+            <Row cells={['Total collected', aed(totals.collected)]} cols={MONEY_COLS} rightFrom={1} />
             <Row cells={['Less expenses paid out', `− ${aed(totals.spent)}`]} cols={MONEY_COLS} rightFrom={1} />
             <Row cells={['NET EARNINGS', aed(totals.net)]} cols={MONEY_COLS} rightFrom={1} kind="sum" />
-            <p className="stmt-note">
-              Cash that should have been in hand across these days: <b>AED {aed(totals.inHand)}</b>.
-            </p>
           </section>
+
+          {totals.cars.length > 0 && (
+            <section className="stmt-sec">
+              <h3>Collected by vehicle</h3>
+              <Row
+                cells={['Vehicle', 'Riders', 'Cash', 'Card / bank', 'Total']}
+                cols={CAR_COLS}
+                rightFrom={1}
+                kind="head"
+              />
+              {totals.cars.map((c) => (
+                <Row
+                  key={c.car_id || 'none'}
+                  cols={CAR_COLS}
+                  rightFrom={1}
+                  cells={[c.name, String(c.riders), aed(c.cash), aed(c.notCash), aed(c.total)]}
+                />
+              ))}
+            </section>
+          )}
 
           {debts.length > 0 && (
             <section className="stmt-sec">
@@ -339,20 +376,48 @@ export default function Sheet() {
             <div>Received by</div>
           </div>
 
+          <div className="stmt-foot">
+            <span>
+              {COMPANY} · Collection statement · {periodText}
+            </span>
+            <span>Summary</span>
+          </div>
+
           <section className="stmt-sec stmt-page2">
-            <header className="stmt-head">
-              <div>
-                <div className="stmt-brand">Adnan Car Lift</div>
-                <div className="stmt-sub">Staff Transport Services · Dubai, UAE</div>
-              </div>
-              <div className="stmt-meta">
-                <span className="stmt-doctype">Rider Detail</span>
-                <div>
-                  <span className="lbl">Period</span>
-                  <b>{periodText}</b>
-                </div>
-              </div>
-            </header>
+            <Letterhead doctype="Rider Detail" meta={[['Period', periodText]]} />
+
+            {days.length > 1 && (
+              <>
+                <h3>Day by day</h3>
+                <Row
+                  cells={['Date', 'Riders', 'Cash', 'Card / bank', 'Total']}
+                  cols={DAY_COLS}
+                  rightFrom={1}
+                  kind="head"
+                />
+                {days.map((d) => (
+                  <Row
+                    key={d.day}
+                    cols={DAY_COLS}
+                    rightFrom={1}
+                    cells={[fmt(d.day), String(d.riders), aed(d.cash), aed(d.notCash), aed(d.total)]}
+                  />
+                ))}
+                <Row
+                  cells={[
+                    'TOTAL',
+                    String(lines.length),
+                    aed(days.reduce((t, d) => t + d.cash, 0)),
+                    aed(days.reduce((t, d) => t + d.notCash, 0)),
+                    aed(days.reduce((t, d) => t + d.total, 0)),
+                  ]}
+                  cols={DAY_COLS}
+                  rightFrom={1}
+                  kind="sum"
+                />
+              </>
+            )}
+
             <h3 style={{ marginTop: '1.25rem' }}>Who paid ({lines.length})</h3>
             <Row cells={['Name', scope === 'day' ? 'Car' : 'Date · Car', 'Paid by', 'Paid', 'Owes']} cols={RIDER_COLS} rightFrom={3} kind="head" />
             {lines.map((l) => (
@@ -370,7 +435,19 @@ export default function Sheet() {
               />
             ))}
             {lines.length === 0 && <p className="stmt-note">No riders were written in this period.</p>}
-            <Row cells={['TOTAL', '', '', aed(totals.collected), '']} cols={RIDER_COLS} rightFrom={3} kind="sum" />
+            <Row
+              cells={['TOTAL FROM THE REGISTER', '', '', aed(splitByMethod(lines).total), '']}
+              cols={RIDER_COLS}
+              rightFrom={3}
+              kind="sum"
+            />
+
+            <div className="stmt-foot">
+              <span>
+                {COMPANY} · Rider detail · {periodText}
+              </span>
+              <span>Page 2</span>
+            </div>
           </section>
         </div>
       )}

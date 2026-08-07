@@ -448,8 +448,8 @@ export default function Day() {
           <Link to={`/sheet?month=${month}`} className="card flex items-center gap-3 no-print">
             <span className="text-2xl">🖨</span>
             <div className="flex-1">
-              <div className="font-semibold">Sheet for {monthLabel(month)}</div>
-              <div className="text-sm muted">Every rider, every expense, what is left to recover — save as PDF.</div>
+              <div className="font-semibold">Statement for {monthLabel(month)}</div>
+              <div className="text-sm muted">Cash, card, expenses, every rider — on the letterhead, save as PDF.</div>
             </div>
             <span className="dim">›</span>
           </Link>

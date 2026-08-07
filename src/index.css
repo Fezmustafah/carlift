@@ -326,71 +326,106 @@ body {
 .stmt {
   --ink: var(--text);
   --rule: var(--border-strong);
+  --lh-bar: var(--brand);
+  --lh-mark-bg: #04654a;
   color: var(--ink);
 }
 
-.stmt-head {
+/* --- letterhead ------------------------------------------------------
+   Mark, company name, document type, and a brand bar under all of it. The
+   same block heads every printed page, because a page that arrives on its own
+   in a WhatsApp forward still has to say whose it is. */
+
+.lh {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--ink);
-  /* The double rule is what makes a page read as letterhead rather than as a
-     heading someone forgot to style. */
-  box-shadow: 0 4px 0 -1px var(--ink);
-  margin-bottom: 0.5rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 3px solid var(--lh-bar);
+  /* The second, thinner rule is what makes a page read as letterhead rather
+     than as a heading someone forgot to style. */
+  box-shadow: 0 5px 0 -1px var(--ink);
+  margin-bottom: 1.4rem;
+}
+
+.lh-id {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.lh-mark {
+  width: 58px;
+  height: 58px;
+  flex: none;
+  border-radius: 13px;
+  /* A grey square where the logo should be is worse than no logo: keep the
+     colour when the sheet is printed. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 
 /* No vw units: printing computes them against the paper box, which shrinks the
-   wordmark to nothing on the very page it exists for. */
-.stmt-brand {
+   company name to nothing on the very page it exists for. */
+.lh-name {
   font-size: 2rem;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   line-height: 1.05;
   text-transform: uppercase;
   color: var(--ink);
 }
 @media (max-width: 520px) {
-  .stmt-brand {
-    font-size: 1.5rem;
-    letter-spacing: 0.04em;
+  .lh-name {
+    font-size: 1.4rem;
+    letter-spacing: 0.03em;
+  }
+  .lh-mark {
+    width: 44px;
+    height: 44px;
   }
 }
 
-.stmt-sub {
-  font-size: 0.8rem;
+.lh-sub {
+  font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-top: 0.3rem;
+  margin-top: 0.25rem;
+}
+.lh-contact {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.stmt-meta {
+.lh-meta {
   text-align: right;
   font-size: 0.8rem;
   line-height: 1.6;
 }
-.stmt-meta .lbl {
+.lh-meta .lbl {
   color: var(--muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.7rem;
 }
-.stmt-meta b {
+.lh-meta b {
   margin-left: 0.6rem;
   font-variant-numeric: tabular-nums;
 }
-.stmt-doctype {
+.lh-doc {
   font-size: 1rem;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   display: block;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.25rem;
   color: var(--ink);
 }
 
@@ -489,6 +524,59 @@ body {
   line-height: 1.5;
 }
 
+/* The two boxes the sheet exists for: what is in the hand, what is in the
+   bank. Side by side because the whole point is that they are not the same
+   money. */
+.stmt-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+@media (max-width: 520px) {
+  .stmt-split {
+    grid-template-columns: 1fr;
+  }
+}
+.stmt-split > div {
+  border: 2px solid var(--rule);
+  border-radius: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  break-inside: avoid;
+}
+.stmt-split .k {
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.stmt-split .v {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0.1rem 0 0.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.stmt-split .s {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.stmt-foot {
+  margin-top: 1.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .stmt-sign {
   margin-top: 2.5rem;
   display: grid;
@@ -508,25 +596,44 @@ body {
   .stmt {
     --ink: #000000;
     --rule: #000000;
+    /* Not var(--brand): a phone in dark mode would print the brand bar in mint
+       green, which on paper is almost nothing. */
+    --lh-bar: #04654a;
     font-size: 11pt;
     color: #000000;
   }
   /* Point sizes, because the wordmark's job is to be unmissable on paper. */
-  .stmt-brand {
-    font-size: 26pt;
+  .lh-name {
+    font-size: 24pt;
     color: #000000;
   }
-  .stmt-sub {
+  .lh-sub,
+  .lh-contact {
     font-size: 8pt;
     color: #333333;
   }
-  .stmt-doctype {
+  .lh-doc {
     font-size: 11pt;
     color: #000000;
   }
-  .stmt-head {
+  .lh-mark {
+    width: 15mm;
+    height: 15mm;
+  }
+  .lh {
+    box-shadow: 0 5px 0 -1px #000000;
+    margin-bottom: 1rem;
+  }
+  .stmt-split .v {
+    font-size: 15pt;
+  }
+  .stmt-split .k,
+  .stmt-split .s,
+  .stmt-foot {
+    color: #333333;
+  }
+  .stmt-split > div {
     border-color: #000000;
-    box-shadow: 0 4px 0 -1px #000000;
   }
   .stmt-title {
     font-size: 12pt;

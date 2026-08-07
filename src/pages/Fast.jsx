@@ -1,24 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { todayISO, currentMonth } from '../lib/dates'
+import { todayISO, addDays, currentMonth, prevMonth } from '../lib/dates'
 import { normalizePhone } from '../lib/wa'
-import { mergeNames, matchNames } from '../lib/names'
+import { nameIndex, suggest, knownRider } from '../lib/names'
+import { cashbox, cashboxRange } from '../lib/cashbox'
+import { splitByMethod, byCar, lapsed, amountPresets, monthOf } from '../lib/register'
 
 // The register. A queue of riders, cash in one hand, phone in the other:
 // name, amount, next. Nothing else is asked, because everything else costs
 // seconds and there are sixty people waiting.
 //
-// Two rules make it safe to be this plain:
+// Three rules make it safe to be this plain:
 //  1. Every line is written on the phone BEFORE it is sent, with an id made
 //     here, so a dead network delays the money, never loses it, and a retry
 //     cannot enter the same rider twice.
-//  2. Names are suggested from the register itself, so the same rider is
-//     spelled the same way on the 5th and on the 9th.
+//  2. Names are suggested from the register itself, months back, so the same
+//     rider is spelled the same way in August and in September.
+//  3. Cash and card are never added into one number. What is in his hand and
+//     what reached the bank are two different questions and the screen answers
+//     both, separately, at all times.
 
 const OUTBOX_KEY = 'carlift.fast.outbox'
 const CAR_KEY = 'carlift.fast.car'
-const FALLBACK_AMOUNTS = [200, 300, 400, 500]
+// Far enough back that last month's riders — and the month before — are still
+// suggested when he types the first two letters on the 5th.
+const NAME_MEMORY_DAYS = 150
 
 // If the phone refuses to write to storage — private window, storage full — the
 // queue lives in memory instead. Worse than the disk, far better than dropping
@@ -78,11 +85,43 @@ function explain(error) {
   return `${error.message} — saved on this phone, nothing lost.`
 }
 
+const aed = (n) => Number(n || 0).toLocaleString()
+
+// A small labelled number. Same shape everywhere so the eye finds the one it
+// wants without reading the words again.
+function Tile({ k, v, sub, color }) {
+  return (
+    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-2)' }}>
+      <div className="text-xs muted truncate">{k}</div>
+      <div className="text-xl font-bold" style={color ? { color } : undefined}>
+        {v}
+      </div>
+      {sub && <div className="text-xs dim truncate">{sub}</div>}
+    </div>
+  )
+}
+
+function Line({ label, value, strong, sign }) {
+  return (
+    <div className={`flex justify-between gap-3 py-1.5 divide-row ${strong ? 'font-bold' : 'text-sm'}`}>
+      <span className={strong ? '' : 'muted'}>{label}</span>
+      <span className="shrink-0" style={{ fontVariantNumeric: 'tabular-nums' }}>
+        {sign === '-' ? '− ' : ''}
+        {aed(value)}
+      </span>
+    </div>
+  )
+}
+
 export default function Fast() {
   const month = currentMonth()
+  const prev = prevMonth()
   const [cars, setCars] = useState([])
-  const [presets, setPresets] = useState(FALLBACK_AMOUNTS)
-  const [pastNames, setPastNames] = useState([])
+  const [history, setHistory] = useState([]) // the register, months back
+  const [memberNames, setMemberNames] = useState([])
+  const [expenses, setExpenses] = useState([])
+  const [onetime, setOnetime] = useState([])
+  const [subs, setSubs] = useState([])
 
   const [car, setCar] = useState(() => localStorage.getItem(CAR_KEY) || '')
   const [method, setMethod] = useState('cash')
@@ -95,6 +134,7 @@ export default function Fast() {
   const [unsent, setUnsent] = useState(readOutbox().length)
   const [confirmId, setConfirmId] = useState(null)
   const [owedOpen, setOwedOpen] = useState(false)
+  const [showLapsed, setShowLapsed] = useState(false)
   const [err, setErr] = useState('')
 
   const nameRef = useRef(null)
@@ -105,26 +145,34 @@ export default function Fast() {
   }, [car])
 
   async function load() {
-    const [{ data: cs }, { data: ts }, { data: all }, { data: ms }] = await Promise.all([
-      supabase.from('cars').select('*').order('name'),
-      supabase.from('takings').select('*').eq('taken_on', todayISO()).order('created_at', { ascending: false }),
-      supabase.from('takings').select('name, amount').order('taken_on', { ascending: false }).limit(400),
-      // Names only. The members list is a spelling aid here, nothing more —
-      // tapping one fills the box and links nothing.
-      supabase.from('members').select('name').neq('status', 'left').order('name').limit(1000),
-    ])
+    const today = todayISO()
+    const monthStart = `${month.key}-01`
+    const [{ data: cs }, { data: ts }, { data: past }, { data: ms }, { data: ex }, { data: ot }, { data: sb }] =
+      await Promise.all([
+        supabase.from('cars').select('*').order('name'),
+        supabase.from('takings').select('*').eq('taken_on', today).order('created_at', { ascending: false }),
+        // Months of register, not days: the man in front of him on the 5th of
+        // September paid in August, and that is exactly the spelling wanted.
+        supabase
+          .from('takings')
+          .select('id, name, amount, method, car_id, taken_on, subscription_id')
+          .gte('taken_on', addDays(today, -NAME_MEMORY_DAYS))
+          .order('taken_on', { ascending: false })
+          .limit(3000),
+        // Names only. The members list is a spelling aid here, nothing more —
+        // tapping one fills the box and links nothing.
+        supabase.from('members').select('name').neq('status', 'left').order('name').limit(1000),
+        supabase.from('expenses').select('*').gte('date', monthStart).order('date'),
+        supabase.from('onetime_rides').select('*').gte('date', monthStart),
+        supabase.from('subscriptions').select('id, amount, paid_via, created_at').gte('created_at', monthStart),
+      ])
+
     setCars(cs || [])
-
-    // Amounts actually being charged in this register, most used first.
-    const counts = new Map()
-    for (const t of all || []) {
-      const v = Number(t.amount)
-      if (v > 0) counts.set(v, (counts.get(v) || 0) + 1)
-    }
-    const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([v]) => v)
-    if (top.length) setPresets(top.sort((a, b) => a - b))
-
-    setPastNames(mergeNames((all || []).map((t) => t.name), (ms || []).map((m) => m.name)))
+    setHistory(past || [])
+    setMemberNames((ms || []).map((m) => m.name))
+    setExpenses(ex || [])
+    setOnetime(ot || [])
+    setSubs(sb || [])
 
     const pending = readOutbox()
     const pendingIds = new Set(pending.map((p) => p.id))
@@ -257,9 +305,94 @@ export default function Fast() {
     URL.revokeObjectURL(url)
   }
 
-  // Spellings from the register and the members list, so one rider does not
-  // become two.
-  const suggestions = useMemo(() => matchNames(pastNames, name), [name, pastNames])
+  function writeName(n) {
+    setName(n)
+    nameRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    amountRef.current?.focus()
+  }
+
+  // ---- what the register knows ------------------------------------------
+
+  // Today's lines and the months behind them, with nothing counted twice.
+  const allLines = useMemo(() => {
+    const today = new Set(rows.map((r) => r.id))
+    return [...rows, ...history.filter((h) => !today.has(h.id))]
+  }, [rows, history])
+
+  // Nothing after today: the register only ever writes today's date, and a
+  // stray future line would be counted in the month but not in the cash.
+  const monthLines = useMemo(
+    () => allLines.filter((l) => monthOf(l.taken_on) === month.key && l.taken_on <= todayISO()),
+    [allLines, month.key],
+  )
+
+  const index = useMemo(() => nameIndex(allLines, memberNames), [allLines, memberNames])
+  const suggestions = useMemo(() => suggest(index, name), [index, name])
+  const known = useMemo(() => knownRider(index, name), [index, name])
+  const presets = useMemo(() => amountPresets(history), [history])
+
+  // Today, counted the same way the End of day screen counts it — same
+  // function, so the two screens can never disagree.
+  const box = useMemo(
+    () =>
+      cashbox({
+        day: todayISO(),
+        takings: rows.filter((r) => !r._pending),
+        pending: rows.filter((r) => r._pending),
+        subs,
+        onetime,
+        expenses,
+      }),
+    [rows, subs, onetime, expenses],
+  )
+  const today = useMemo(() => splitByMethod(rows), [rows])
+
+  const monthMoney = useMemo(() => splitByMethod(monthLines), [monthLines])
+  // Payments taken on the Collect screen are rare since the register took over,
+  // but money that was taken and not shown is the one mistake this app exists
+  // to prevent. A taking that was put on a rider's record is already counted
+  // once as the taking — its subscription is the copy and is left out.
+  const monthSubs = useMemo(() => {
+    const copies = new Set(allLines.map((l) => l.subscription_id).filter(Boolean))
+    return splitByMethod(
+      subs
+        .filter((s) => !copies.has(s.id) && monthOf(s.created_at) === month.key)
+        .map((s) => ({ amount: s.amount, method: s.paid_via })),
+    )
+  }, [subs, allLines, month.key])
+  const monthSpent = useMemo(
+    () => expenses.filter((e) => monthOf(e.date) === month.key).reduce((t, e) => t + Number(e.amount), 0),
+    [expenses, month.key],
+  )
+  const monthRides = useMemo(
+    () => onetime.filter((o) => monthOf(o.date) === month.key).reduce((t, o) => t + Number(o.amount), 0),
+    [onetime, month.key],
+  )
+  const monthCash = useMemo(
+    () =>
+      cashboxRange({
+        from: `${month.key}-01`,
+        to: todayISO(),
+        takings: allLines.filter((l) => !l._pending),
+        pending: allLines.filter((l) => l._pending),
+        subs,
+        onetime,
+        expenses,
+      }).expected,
+    [allLines, subs, onetime, expenses, month.key],
+  )
+  const monthTotal = monthMoney.total + monthRides + monthSubs.total
+  const monthNotCash = monthMoney.notCash + monthSubs.notCash
+  const monthCars = useMemo(() => byCar(monthLines, cars), [monthLines, cars])
+  const people = useMemo(
+    () => new Set(monthLines.map((l) => l.name.trim().toLowerCase())).size,
+    [monthLines],
+  )
+  const owedTotal = useMemo(() => allLines.reduce((t, l) => t + Number(l.owed || 0), 0), [allLines])
+
+  // Who paid last month and has not come this month. The list that turns the
+  // register into a collection round instead of a receipt book.
+  const missing = useMemo(() => lapsed(allLines, month.key, prev.key), [allLines, month.key, prev.key])
 
   // Written twice in one day is nearly always a slip, not a second payment.
   const alreadyToday = useMemo(() => {
@@ -268,8 +401,6 @@ export default function Fast() {
     return rows.find((r) => r.name.trim().toLowerCase() === q) || null
   }, [name, rows])
 
-  const total = rows.reduce((t, r) => t + Number(r.amount), 0)
-  const cashTotal = rows.filter((r) => (r.method || 'cash') === 'cash').reduce((t, r) => t + Number(r.amount), 0)
   const carName = (id) => cars.find((c) => c.id === id)?.name
 
   return (
@@ -284,24 +415,50 @@ export default function Fast() {
           <button onClick={backup} className="btn-ghost px-3 py-1.5 text-sm" title="Download the whole register">
             ⬇ Backup
           </button>
-          <Link to={`/sheet?day=${todayISO()}`} className="btn-ghost px-3 py-1.5 text-sm" title="Printable sheet">
+          <Link to={`/sheet?day=${todayISO()}`} className="btn-ghost px-3 py-1.5 text-sm" title="Printable statement">
             🖨 PDF
           </Link>
         </div>
       </div>
 
-      <div className="card flex items-center justify-between gap-3">
+      {/* Today. The first number is the one he can check against his own
+          pocket; everything beside it is money that exists somewhere else. */}
+      <div className="card space-y-3">
         <div>
-          <div className="text-sm muted">Taken today</div>
-          <div className="text-3xl font-bold" style={{ color: 'var(--ok)' }}>
-            AED {total.toLocaleString()}
+          <div className="text-sm muted">Cash in your hand now</div>
+          <div className="text-4xl font-bold" style={{ color: box.expected < 0 ? 'var(--bad)' : 'var(--ok)' }}>
+            AED {aed(box.expected)}
           </div>
-          {total !== cashTotal && <div className="text-xs dim">AED {cashTotal.toLocaleString()} of it in cash</div>}
+          <div className="text-xs dim">
+            {aed(box.fast + box.unsentCash)} cash from the register
+            {box.payments > 0 ? ` + ${aed(box.payments)} on Collect` : ''}
+            {box.rides > 0 ? ` + ${aed(box.rides)} one-time` : ''}
+            {box.spent > 0 ? ` − ${aed(box.spent)} paid out` : ''}
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-sm muted">Riders</div>
-          <div className="text-3xl font-bold">{rows.length}</div>
+
+        <div className="grid grid-cols-3 gap-2">
+          <Tile k="Taken today" v={aed(today.total)} sub={`${rows.length} rider${rows.length === 1 ? '' : 's'}`} />
+          <Tile
+            k="💳 Card"
+            v={aed(today.card)}
+            sub={today.card > 0 ? 'in the account' : '—'}
+            color={today.card > 0 ? 'var(--info)' : undefined}
+          />
+          <Tile
+            k="🏦 Transfer"
+            v={aed(today.transfer)}
+            sub={today.transfer > 0 ? 'in the account' : '—'}
+            color={today.transfer > 0 ? 'var(--info)' : undefined}
+          />
         </div>
+
+        {today.notCash > 0 && (
+          <p className="text-xs dim">
+            AED {aed(today.notCash)} of today's money went straight to the bank account. It is not in your bag and it
+            is not in the number above.
+          </p>
+        )}
       </div>
 
       {unsent > 0 ? (
@@ -368,22 +525,16 @@ export default function Fast() {
         {alreadyToday && (
           <p className="text-xs" style={{ color: 'var(--warn)' }}>
             ⚠ {alreadyToday.name} is already in today's register for AED{' '}
-            {Number(alreadyToday.amount).toLocaleString()}. Write it again only if they really paid twice.
+            {aed(alreadyToday.amount)}. Write it again only if they really paid twice.
           </p>
         )}
 
         {suggestions.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {suggestions.map((n) => (
-              <button
-                key={n}
-                onClick={() => {
-                  setName(n)
-                  amountRef.current?.focus()
-                }}
-                className="pill"
-              >
-                {n}
+            {suggestions.map((s) => (
+              <button key={s.key} onClick={() => writeName(s.name)} className="pill">
+                {s.name}
+                {s.amount > 0 && <span className="dim"> · {aed(s.amount)}</span>}
               </button>
             ))}
           </div>
@@ -399,11 +550,25 @@ export default function Fast() {
         />
 
         <div className="flex flex-wrap gap-2">
-          {presets.map((v) => (
-            <button key={v} onClick={() => save(v)} className="btn-primary px-4 py-3 text-base font-bold">
-              {v}
+          {/* What this rider paid last time, first and marked. Nothing is
+              entered by tapping the name alone — it is still one deliberate
+              press on the amount. */}
+          {known && (
+            <button
+              onClick={() => save(known.amount)}
+              className="btn-primary px-4 py-3 text-base font-bold"
+              style={{ boxShadow: '0 0 0 3px var(--ring)' }}
+            >
+              {aed(known.amount)} · usual
             </button>
-          ))}
+          )}
+          {presets
+            .filter((v) => !known || v !== known.amount)
+            .map((v) => (
+              <button key={v} onClick={() => save(v)} className="btn-primary px-4 py-3 text-base font-bold">
+                {v}
+              </button>
+            ))}
         </div>
 
         <div className="flex gap-2">
@@ -483,10 +648,8 @@ export default function Fast() {
                 {r.phone ? ` · ${r.phone}` : ''}
               </div>
             </div>
-            {Number(r.owed) > 0 && (
-              <span className="chip chip-warn shrink-0">owes {Number(r.owed).toLocaleString()}</span>
-            )}
-            <span className="font-bold shrink-0">{Number(r.amount).toLocaleString()}</span>
+            {Number(r.owed) > 0 && <span className="chip chip-warn shrink-0">owes {aed(r.owed)}</span>}
+            <span className="font-bold shrink-0">{aed(r.amount)}</span>
             {r._pending && <span className="chip chip-warn shrink-0">unsent</span>}
             {confirmId === r.id ? (
               <>
@@ -519,6 +682,103 @@ export default function Fast() {
         </div>
         <span className="dim">›</span>
       </Link>
+
+      {/* ---- the month, under the day's work ------------------------------
+          Below the queue on purpose: at six in the morning the only thing on
+          the screen should be the name box. This is what he reads afterwards,
+          and what the boss asks about. */}
+      <div className="card space-y-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="h2">{month.en} so far</h2>
+          <div className="text-2xl font-bold">AED {aed(monthTotal)}</div>
+        </div>
+
+        <div>
+          <Line label="💵 Cash" value={monthMoney.cash + monthRides + monthSubs.cash} />
+          <Line label="💳 Card" value={monthMoney.card + monthSubs.card} />
+          <Line label="🏦 Bank transfer" value={monthMoney.transfer + monthSubs.transfer} />
+          <Line label="Collected this month" value={monthTotal} strong />
+          <Line label="Paid out" value={monthSpent} sign="-" />
+          <Line label="Cash that should be in hand" value={monthCash} strong />
+        </div>
+
+        <p className="text-xs dim">
+          {monthLines.length} payment{monthLines.length === 1 ? '' : 's'} from {people} rider
+          {people === 1 ? '' : 's'}
+          {monthNotCash > 0
+            ? ` · AED ${aed(monthNotCash)} of it went to the bank account, not to your hand`
+            : ''}
+          {owedTotal > 0 ? ` · AED ${aed(owedTotal)} still to recover` : ''}.
+        </p>
+
+        {monthCars.length > 0 && (
+          <div>
+            <div className="text-xs muted uppercase tracking-wide pb-1">By vehicle</div>
+            {monthCars.map((c) => (
+              <div key={c.car_id || 'none'} className="py-1.5 divide-row">
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="font-medium truncate">{c.name}</span>
+                  <span className="shrink-0">
+                    {aed(c.total)}
+                    <span className="dim text-xs"> · {c.riders}</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+                  <div
+                    className="h-full"
+                    style={{
+                      width: `${Math.round((c.total / (monthMoney.total || 1)) * 100)}%`,
+                      background: 'var(--brand)',
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {missing.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowLapsed((v) => !v)}
+              className="w-full flex items-center justify-between gap-3 py-1.5 text-left"
+            >
+              <span className="text-sm font-semibold" style={{ color: 'var(--warn)' }}>
+                {missing.length} paid in {prev.en} but not yet in {month.en}
+              </span>
+              <span className="dim">{showLapsed ? '▾' : '▸'}</span>
+            </button>
+            {showLapsed && (
+              <>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {missing.map((m) => (
+                    <button key={m.name} onClick={() => writeName(m.name)} className="pill">
+                      {m.name}
+                      {m.amount > 0 && <span className="dim"> · {aed(m.amount)}</span>}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs dim mt-2">
+                  Tap a name to write them into the register when they pay. This is the register's own memory of{' '}
+                  {prev.en} — not the members list.
+                </p>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2 flex-wrap pt-1">
+          <Link to={`/sheet?month=${month.key}`} className="btn-ghost px-3 py-1.5 text-sm">
+            🖨 Statement for {month.en}
+          </Link>
+          <Link
+            to={`/sheet?from=${month.key}-05&to=${month.key}-10`}
+            className="btn-ghost px-3 py-1.5 text-sm"
+          >
+            Round 5–10
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }

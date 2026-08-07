@@ -10,7 +10,7 @@ const tabs = [
   { to: '/members', label: 'Members', icon: '👥', bar: true },
   { to: '/verify', label: 'Verify', icon: '🔍' },
   { to: '/day', label: 'End of day', icon: '🧮' },
-  { to: '/sheet', label: 'Sheet', icon: '🖨' },
+  { to: '/sheet', label: 'Statement', icon: '🖨' },
   { to: '/report', label: 'Report', icon: '📈' },
   { to: '/expiring', label: 'Expiring', icon: '⏰' },
   { to: '/logs', label: 'Logs', icon: '📒' },
