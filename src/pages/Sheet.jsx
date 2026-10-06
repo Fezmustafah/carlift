@@ -7,6 +7,9 @@ import { monthKey, monthRange, monthLabel } from '../lib/month'
 import { cashboxRange } from '../lib/cashbox'
 import { registerLines, splitByMethod, byCar } from '../lib/register'
 import Letterhead, { COMPANY } from '../components/Letterhead'
+import { PageHead } from '../components/ui'
+import { fetchAll } from '../lib/fetchAll'
+import { PrinterIcon } from '../components/icons'
 
 // The statement. One day, one round, or one month of the register, printed
 // under the company letterhead for the owner.
@@ -78,7 +81,10 @@ export default function Sheet() {
   useEffect(() => {
     setLoading(true)
     Promise.all([
-      supabase.from('takings').select('*').gte('taken_on', start).lte('taken_on', end).order('taken_on'),
+      // Paged: a long range is past the 1,000 rows one request returns.
+      fetchAll(() =>
+        supabase.from('takings').select('*').gte('taken_on', start).lte('taken_on', end).order('taken_on').order('id'),
+      ),
       supabase
         .from('subscriptions')
         .select('id, amount, paid_via, created_at')
@@ -181,57 +187,57 @@ export default function Sheet() {
   return (
     <div className="space-y-5">
       <div className="no-print space-y-3">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <h1 className="h1">Statement</h1>
-          <button onClick={() => window.print()} className="btn-primary px-4">
-            🖨 Save as PDF
-          </button>
-        </div>
+        <PageHead
+          title="Statement"
+          subtitle="On the letterhead, for the boss."
+          action={
+            <button onClick={() => window.print()} className="btn-primary px-4 py-3 rounded-[13px] text-[13.5px]">
+              <PrinterIcon className="w-[18px] h-[18px]" />
+              PDF
+            </button>
+          }
+        />
 
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setParams({ day: todayISO() })} className={`pill ${scope === 'day' ? 'pill-on' : ''}`}>
+        <div className="seg">
+          <button aria-pressed={scope === 'day'} onClick={() => setParams({ day: todayISO() })}>
             Today
           </button>
           <button
-            onClick={() => setParams({ month: monthKey() })}
-            className={`pill ${scope === 'month' ? 'pill-on' : ''}`}
-          >
-            This month
-          </button>
-          <button
+            aria-pressed={scope === 'range'}
             onClick={() => setParams({ from: monthStartISO().slice(0, 8) + '05', to: monthStartISO().slice(0, 8) + '10' })}
-            className={`pill ${scope === 'range' ? 'pill-on' : ''}`}
           >
-            Collection round 5–10
+            Round 5–10
+          </button>
+          <button aria-pressed={scope === 'month'} onClick={() => setParams({ month: monthKey() })}>
+            This month
           </button>
         </div>
 
         {/* Any two dates, because a round can slip and the report still has to
             cover exactly the days it happened on. */}
-        <div className="card flex items-end gap-2 flex-wrap">
-          <div>
-            <label className="label">From</label>
+        <div className="card grid grid-cols-2 gap-2 p-3">
+          <label className="block min-w-0">
+            <span className="label">From</span>
             <input
-              className="input w-auto"
+              className="input"
               type="date"
               value={start}
               onChange={(e) => setParams({ from: e.target.value, to: end })}
             />
-          </div>
-          <div>
-            <label className="label">To</label>
+          </label>
+          <label className="block min-w-0">
+            <span className="label">To</span>
             <input
-              className="input w-auto"
+              className="input"
               type="date"
               value={end}
               onChange={(e) => setParams({ from: start, to: e.target.value })}
             />
-          </div>
+          </label>
         </div>
 
-        <p className="text-xs dim">
-          Print opens your phone's own dialog — choose <b>Save as PDF</b> as the printer. Page 1 is the summary for
-          the boss, page 2 is the list of who paid.
+        <p className="text-[12px] muted px-0.5">
+          PDF opens your phone's print screen — choose <b className="text-ink">Save as PDF</b> as the printer.
         </p>
       </div>
 

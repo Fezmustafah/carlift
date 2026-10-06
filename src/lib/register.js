@@ -11,6 +11,8 @@
 // Everything here is pure, so every one of those can be checked without a
 // browser or a database.
 
+import { riderKey } from './names.js'
+
 const CASH = 'cash'
 const num = (v) => Number(v || 0)
 const clean = (v) => String(v ?? '').trim()
@@ -98,7 +100,8 @@ export function lapsed(takings = [], month, prev) {
   const paidNow = new Set()
   const last = new Map()
   for (const t of takings) {
-    const key = clean(t.name).toLowerCase()
+    // "Santos, Ramil" in October is the "Ramil Santos" of September.
+    const key = riderKey(t.name)
     if (!key) continue
     const m = monthOf(t.taken_on)
     if (m === month) paidNow.add(key)
@@ -111,6 +114,21 @@ export function lapsed(takings = [], month, prev) {
     .filter(([key]) => !paidNow.has(key))
     .map(([, t]) => ({ name: clean(t.name), amount: num(t.amount), car_id: t.car_id || null }))
     .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+// A slip of the thumb at the front of a queue: 3000 for 300, 30 for 300. The
+// amount is compared with what this rider paid last time, or with the middle
+// of the usual buttons for a rider not seen before. Two months paid at once is
+// normal and must not nag; ten times the usual is not.
+export function unusualAmount(amount, usual = 0, presets = []) {
+  const v = num(amount)
+  if (!(v > 0)) return null
+  const sorted = [...presets].map(num).filter((p) => p > 0).sort((a, b) => a - b)
+  const base = num(usual) > 0 ? num(usual) : sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0
+  if (!base) return null
+  if (v >= base * 2.5) return { base, kind: 'high' }
+  if (v <= base / 3) return { base, kind: 'low' }
+  return null
 }
 
 // The amounts actually being charged, most used first — the buttons in front

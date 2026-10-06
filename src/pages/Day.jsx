@@ -4,6 +4,8 @@ import { todayISO, addDays, fmt } from '../lib/dates'
 import { Link } from 'react-router-dom'
 import { monthKey, monthLabel, lastMonths } from '../lib/month'
 import { cashbox, difference, daysOfMonth } from '../lib/cashbox'
+import { PageHead, Money, Banner } from '../components/ui'
+import { ChevronLeft, ChevronRight, DocIcon } from '../components/icons'
 
 // End of a collection day: count the bag, compare it with the books, write the
 // answer down before the memory of the day is gone.
@@ -205,50 +207,60 @@ export default function Day() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="h1">End of day</h1>
-        <select className="input w-auto" value={month} onChange={(e) => setMonth(e.target.value)}>
-          {lastMonths(6).map((k) => (
-            <option key={k} value={k}>
-              {monthLabel(k)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <button onClick={() => setDay((d) => addDays(d, -1))} className="btn-ghost px-3">
-          ‹
-        </button>
-        <input className="input flex-1 text-center" type="date" value={day} onChange={(e) => setDay(e.target.value)} />
-        <button
-          onClick={() => setDay((d) => (d >= todayISO() ? d : addDays(d, 1)))}
-          className="btn-ghost px-3"
-          disabled={day >= todayISO()}
-        >
-          ›
-        </button>
-      </div>
+      <PageHead
+        title="End of day"
+        subtitle="Write what you paid out, then count what is left in the bag."
+        below={
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setDay((d) => addDays(d, -1))} className="icon-btn" aria-label="Day before">
+                <ChevronLeft className="w-[18px] h-[18px]" />
+              </button>
+              <input
+                className="input flex-1 text-center font-bold h-11 py-0"
+                type="date"
+                max={todayISO()}
+                value={day}
+                onChange={(e) => e.target.value && setDay(e.target.value)}
+              />
+              <button
+                onClick={() => setDay((d) => (d >= todayISO() ? d : addDays(d, 1)))}
+                className="icon-btn disabled:opacity-30"
+                disabled={day >= todayISO()}
+                aria-label="Day after"
+              >
+                <ChevronRight className="w-[18px] h-[18px]" />
+              </button>
+            </div>
+            <select className="input h-11 py-0 text-[14px] font-semibold" value={month} onChange={(e) => setMonth(e.target.value)}>
+              {lastMonths(6).map((k) => (
+                <option key={k} value={k}>
+                  Month table: {monthLabel(k)}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
 
       {box.unsent > 0 && (
-        <div className="card flex items-center gap-3" style={{ borderColor: 'var(--warn)' }}>
-          <span className="text-xl">📶</span>
-          <div className="flex-1 text-sm">
-            <b>{box.unsent}</b> rider{box.unsent === 1 ? '' : 's'} still unsent on this phone — their cash{' '}
-            <b>is</b> counted below. Send them before you close, on the Register screen.
-          </div>
-        </div>
+        <Banner tone="warn">
+          <b>{box.unsent}</b> rider{box.unsent === 1 ? '' : 's'} still unsent on this phone — their cash <b>is</b>{' '}
+          counted below. Send them before you close, on the Register screen.
+        </Banner>
       )}
 
       {loading ? (
         <div className="skeleton h-64" />
       ) : (
         <>
-          <div className="card space-y-1">
-            <div className="text-sm muted">Should be left in your hand</div>
-            <div className="text-4xl font-bold" style={{ color: box.expected < 0 ? 'var(--bad)' : 'var(--ok)' }}>
-              AED {box.expected.toLocaleString()}
-            </div>
+          <div className="card space-y-1 rise">
+            <p className="label">Should be left in your hand</p>
+            <Money
+              value={box.expected}
+              className="text-[34px]"
+              tone={box.expected < 0 ? 'var(--bad)' : undefined}
+            />
             <div className="pt-2">
               <Line label={`Register, cash${box.unsent ? ' (with unsent)' : ''}`} value={box.fast + box.unsentCash} />
               {box.payments > 0 && <Line label="Payments taken on Collect" value={box.payments} />}
@@ -266,7 +278,7 @@ export default function Day() {
           {/* Money out, on the day it left the bag. */}
           <div className="card space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="font-semibold">What you paid out</h2>
+              <h2 className="h2">What you paid out</h2>
               {box.spent > 0 && (
                 <span className="font-bold" style={{ color: 'var(--bad)' }}>
                   AED {box.spent.toLocaleString()}
@@ -274,7 +286,7 @@ export default function Day() {
               )}
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
               {['driver', 'fuel', 'salik', 'maintenance', 'fine', 'other'].map((c) => (
                 <button
                   key={c}
@@ -309,7 +321,7 @@ export default function Day() {
               onChange={(e) => setPayOut((p) => ({ ...p, note: e.target.value }))}
             />
 
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
               <button
                 onClick={() => setPayOut((p) => ({ ...p, car_id: '' }))}
                 className={`pill ${payOut.car_id === '' ? 'pill-on' : ''}`}
@@ -365,8 +377,8 @@ export default function Day() {
               {diff === null ? (
                 <span className="muted text-sm">Type what you counted.</span>
               ) : diff === 0 ? (
-                <span className="font-bold" style={{ color: 'var(--ok)' }}>
-                  ✅ Balanced — {box.riders} rider{box.riders === 1 ? '' : 's'}
+                <span className="font-extrabold" style={{ color: 'var(--ok)' }}>
+                  ✓ Balanced — {box.riders} rider{box.riders === 1 ? '' : 's'}
                 </span>
               ) : (
                 <div style={{ color: 'var(--bad)' }}>
@@ -376,7 +388,7 @@ export default function Day() {
                   <div className="text-xs">
                     {diff < 0
                       ? 'A rider was not entered, or the money is not all here.'
-                      : 'Somebody paid who was not entered — add them on Fast lane.'}
+                      : 'Somebody paid who was not written — add them on the Register.'}
                   </div>
                 </div>
               )}
@@ -445,13 +457,15 @@ export default function Day() {
             </div>
           )}
 
-          <Link to={`/sheet?month=${month}`} className="card flex items-center gap-3 no-print">
-            <span className="text-2xl">🖨</span>
-            <div className="flex-1">
-              <div className="font-semibold">Statement for {monthLabel(month)}</div>
-              <div className="text-sm muted">Cash, card, expenses, every rider — on the letterhead, save as PDF.</div>
+          <Link to={`/sheet?month=${month}`} className="card flex items-center gap-3 no-print press">
+            <span className="w-10 h-10 rounded-xl bg-sunk grid place-items-center shrink-0">
+              <DocIcon className="w-5 h-5 text-blue" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-extrabold">Statement for {monthLabel(month)}</div>
+              <div className="text-[12px] muted">Cash, card, expenses, every rider — on the letterhead, save as PDF.</div>
             </div>
-            <span className="dim">›</span>
+            <ChevronRight className="w-4 h-4 text-soft shrink-0" />
           </Link>
 
           {round.length > 0 && (

@@ -93,7 +93,7 @@ export default function Members() {
         onChange={(e) => setQ(e.target.value)}
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
         {FILTERS.map((f) => (
           <button key={f} onClick={() => setFilter(f)} className={`pill ${filter === f ? 'pill-on' : ''}`}>
             {f} <span className="opacity-60">{counts[f]}</span>

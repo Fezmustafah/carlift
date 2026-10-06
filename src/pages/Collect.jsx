@@ -233,7 +233,7 @@ export default function Collect() {
         onChange={(e) => setQ(e.target.value)}
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
         <button onClick={() => setCarFilter('')} className={`pill ${carFilter === '' ? 'pill-on' : ''}`}>
           All
         </button>

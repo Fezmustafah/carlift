@@ -16,6 +16,26 @@
 
 const clean = (v) => String(v ?? '').trim()
 
+// The words of a name as he would read them: no case, no accents, no dots or
+// commas. "Niño" and "Nino" are the same rider; so are "Ramil S." and "ramil s".
+export function nameWords(name) {
+  return String(name ?? '')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '') // the accents NFD split off
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+// Who a line belongs to. Word order is ignored as well — "Santos Ramil" and
+// "Ramil Santos" are one person — but nothing looser than that: "Mark" and
+// "Mary" are one letter apart and two people, so near-misses are only ever
+// offered for a human to decide (see analysis.js), never merged here.
+export function riderKey(name) {
+  return nameWords(name).sort().join(' ')
+}
+
 // One entry per rider: the newest spelling of the name, the last amount, when
 // it was last seen and how often it has been written.
 export function nameIndex(takings = [], memberNames = []) {

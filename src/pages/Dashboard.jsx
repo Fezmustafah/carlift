@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { memberState, isActivePaid, ridesShift } from '../lib/status'
 import { monthStartISO } from '../lib/dates'
+import { PageHead } from '../components/ui'
 
 function Tile({ label, value, sub, tone, to }) {
   const body = (
@@ -112,10 +113,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline justify-between gap-2">
-        <h1 className="h1">Dashboard</h1>
-        <span className="text-sm dim">{monthName}</span>
-      </div>
+      <PageHead
+        title="Seats per car"
+        subtitle={`${monthName} · from the members list. The register's own month is on the Month tab.`}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Tile

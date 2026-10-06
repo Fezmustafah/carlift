@@ -21,11 +21,11 @@ export function Mark({ className = 'lh-mark' }) {
       <rect x="392" y="180" width="216" height="56" rx="28" fill="#ffffff" />
       <rect x="250" y="235" width="500" height="470" rx="70" fill="#ffffff" />
       <rect x="315" y="300" width="370" height="170" rx="42" fill="var(--lh-mark-bg)" />
-      <rect x="315" y="530" width="105" height="62" rx="31" fill="#ffd166" />
-      <rect x="580" y="530" width="105" height="62" rx="31" fill="#ffd166" />
-      <rect x="315" y="628" width="370" height="42" rx="21" fill="#cfd8d3" />
-      <rect x="212" y="620" width="96" height="150" rx="48" fill="#0d2b22" />
-      <rect x="692" y="620" width="96" height="150" rx="48" fill="#0d2b22" />
+      <rect x="315" y="530" width="105" height="62" rx="31" fill="#f0b429" />
+      <rect x="580" y="530" width="105" height="62" rx="31" fill="#f0b429" />
+      <rect x="315" y="628" width="370" height="42" rx="21" fill="#d4d5c8" />
+      <rect x="212" y="620" width="96" height="150" rx="48" fill="#20231e" />
+      <rect x="692" y="620" width="96" height="150" rx="48" fill="#20231e" />
     </svg>
   )
 }

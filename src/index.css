@@ -1,77 +1,92 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------
-   Design tokens. One palette, light + dark, used by every class
-   below. Pages should use these classes (.card, .muted, .btn-*)
-   instead of raw stone-/emerald- utilities so dark mode stays right.
+   The Falco palette (Falcon Ops), so the two apps he runs every day
+   look like one family: his paper, his ink, his blue.
+
+   Contrast, measured against the surface each colour sits on:
+     ink   on card 14.30:1   blue  on card 5.91:1   white on blue 6.57:1
+     muted on card  5.97:1   muted on page 5.46:1   muted on sunk 5.02:1
+     good / warn / bad 5.3–5.9:1
+   `soft` is for borders and empty-field hints only — never for words.
+
+   Light only, like Falco: the paper is the design.
    --------------------------------------------------------------- */
-:root {
-  --bg: #f6f6f3;
-  --surface: #ffffff;
-  --surface-2: #f2f2ee;
-  --border: #e4e4dd;
-  --border-strong: #d3d3c9;
-  --text: #1b1c19;
-  --muted: #6d7069;
-  --dim: #9a9d95;
+@theme {
+  --color-page: #ece9dc; /* the surface everything sits on */
+  --color-card: #f5f3e9; /* his paper — anything holding data */
+  --color-sunk: #e3e0d2; /* chips, inset rows, tracks */
+  --color-ink: #20231e;
+  --color-muted: #5a5e53; /* every small print */
+  --color-soft: #8b8e77; /* control borders + placeholders ONLY */
+  --color-hair: #d4d5c8; /* decorative dividers */
+  --color-blue: #2347ed;
+  --color-blue-ink: #12269b; /* pressed */
+  --color-good: #1f6b45;
+  --color-warn: #8a5a00;
+  --color-bad: #b3261e;
 
-  --brand: #047857;
-  --brand-hover: #036349;
-  --brand-fg: #ffffff;
-  --brand-soft: #d9f2e7;
-  --brand-soft-fg: #04624a;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --ok: #047857;
-  --ok-soft: #d9f2e7;
-  --warn: #b45309;
-  --warn-soft: #fdefd6;
-  --bad: #be2828;
-  --bad-soft: #fbdede;
-  --info: #0369a1;
-  --info-soft: #dbeefc;
-
-  --ring: color-mix(in srgb, var(--brand) 35%, transparent);
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.04);
+  --tracking-display: -0.055em;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #101312;
-    --surface: #181c1a;
-    --surface-2: #1f2422;
-    --border: #2a302d;
-    --border-strong: #3a423e;
-    --text: #ecefec;
-    --muted: #9ba49f;
-    --dim: #6f7a75;
+/* The names every page was already written against, now pointing at the
+   palette above — so pages that were not touched still come out right. */
+:root {
+  --bg: #ece9dc;
+  --surface: #f5f3e9;
+  --surface-2: #e3e0d2;
+  --border: #d4d5c8;
+  --border-strong: #8b8e77;
+  --text: #20231e;
+  --muted: #5a5e53;
+  /* Was a pale grey for small print. Falco's rule: small print is muted,
+     because pale grey cannot be read on a phone in daylight. */
+  --dim: #5a5e53;
 
-    --brand: #34d399;
-    --brand-hover: #4ade9f;
-    --brand-fg: #06231a;
-    --brand-soft: #0c3a2c;
-    --brand-soft-fg: #7ff0c4;
+  --brand: #2347ed;
+  --brand-hover: #12269b;
+  --brand-fg: #ffffff;
+  --brand-soft: color-mix(in srgb, #2347ed 12%, #f5f3e9);
+  --brand-soft-fg: #12269b;
 
-    --ok: #34d399;
-    --ok-soft: #0c3a2c;
-    --warn: #fbbf24;
-    --warn-soft: #3d2f0c;
-    --bad: #f87171;
-    --bad-soft: #431d1d;
-    --info: #60a5fa;
-    --info-soft: #102c47;
+  --ok: #1f6b45;
+  --ok-soft: color-mix(in srgb, #1f6b45 13%, #f5f3e9);
+  --warn: #8a5a00;
+  --warn-soft: color-mix(in srgb, #8a5a00 13%, #f5f3e9);
+  --bad: #b3261e;
+  --bad-soft: #fbedea;
+  /* Card and bank money: real, but not in the bag. */
+  --info: #2347ed;
+  --info-soft: color-mix(in srgb, #2347ed 12%, #f5f3e9);
 
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
-  }
+  --ring: color-mix(in srgb, #2347ed 25%, transparent);
+  --shadow: none;
+
+  /* The bottom bar's height above the phone's safe area: 20 + 62 + 10.
+     Everything that floats above it is measured from it. */
+  --nav-h: 92px;
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Manrope runs loose at display sizes; his sites set it tight. */
+h1 {
+  letter-spacing: var(--tracking-display);
 }
 
 ::selection {
@@ -79,163 +94,242 @@ body {
   color: var(--brand-soft-fg);
 }
 
-/* --- text helpers ------------------------------------------------ */
-.muted {
-  color: var(--muted);
-}
-.dim {
-  color: var(--dim);
-}
-.brand-text {
-  color: var(--brand);
-}
-.h1 {
-  @apply text-xl font-bold tracking-tight;
-}
-.h2 {
-  @apply text-base font-bold tracking-tight;
+/* Components sit in their layer so a page can still say `card py-2` and get
+   py-2 — an unlayered class would quietly beat every utility. */
+@layer components {
+  /* --- text helpers ---------------------------------------------- */
+  .muted {
+    color: var(--muted);
+  }
+  .dim {
+    color: var(--dim);
+  }
+  .brand-text {
+    color: var(--brand);
+  }
+  .h1 {
+    @apply text-[22px] font-extrabold leading-tight;
+    letter-spacing: var(--tracking-display);
+  }
+  .h2 {
+    @apply text-[15px] font-extrabold tracking-tight;
+  }
+  /* The word that carries the sentence, in his italic serif. */
+  .accent {
+    @apply font-serif italic font-normal;
+    letter-spacing: 0;
+  }
+  .num {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+  /* Falco's small capitals over a field or a figure. */
+  .label {
+    @apply mb-1.5 block text-[10.5px] font-extrabold uppercase tracking-[0.12em];
+    color: var(--muted);
+  }
+
+  /* --- surfaces -------------------------------------------------- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    @apply rounded-2xl p-4;
+  }
+  .card-tight {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    @apply rounded-xl p-3;
+  }
+  .sunken {
+    background: var(--surface-2);
+    @apply rounded-xl;
+  }
+  .divide-row + .divide-row {
+    border-top: 1px solid var(--border);
+  }
+
+  /* --- form ------------------------------------------------------ */
+  /* `soft`, not the hairline: an input's edge is information, and 1.33:1
+     is invisible at arm's length in the sun. 16px text so iOS never zooms. */
+  .input {
+    background: #ffffff;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    @apply w-full rounded-xl px-3 py-3 text-base outline-none transition;
+  }
+  .input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  .input::placeholder {
+    color: #8b8e77;
+    font-family: var(--font-sans);
+  }
+  .input-lg {
+    @apply rounded-2xl px-4 py-4 text-xl;
+    border-width: 2px;
+  }
+
+  /* --- buttons --------------------------------------------------- */
+  .btn-primary {
+    background: var(--brand);
+    color: var(--brand-fg);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-extrabold transition active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--brand-hover);
+  }
+  .btn-ghost {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-semibold transition active:scale-[0.97] disabled:opacity-40;
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+  }
+  .btn-soft {
+    background: var(--brand-soft);
+    color: var(--brand);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-extrabold transition active:scale-[0.97] disabled:opacity-40;
+  }
+  .btn-danger {
+    background: var(--bad-soft);
+    color: var(--bad);
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-extrabold transition active:scale-[0.97];
+  }
+  .btn-lg {
+    @apply py-3.5 text-lg;
+  }
+  /* A pressed control should feel pressed. */
+  .press {
+    @apply transition-transform duration-150 active:scale-[0.97];
+  }
+  .tap {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  /* The 44px square buttons in a page's header, as in Falco. */
+  .icon-btn {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--muted);
+    @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] transition active:scale-[0.97];
+  }
+
+  /* --- chips ----------------------------------------------------- */
+  .chip {
+    @apply inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold leading-none;
+  }
+  .chip-ok {
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+  .chip-warn {
+    background: var(--warn-soft);
+    color: var(--warn);
+  }
+  .chip-bad {
+    background: var(--bad-soft);
+    color: var(--bad);
+  }
+  .chip-info {
+    background: var(--info-soft);
+    color: var(--info);
+  }
+  .chip-mute {
+    background: var(--surface-2);
+    color: var(--muted);
+  }
+
+  /* Filter pills — things to tap, not labels. */
+  .pill {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold transition active:scale-[0.97];
+  }
+  .pill-on {
+    background: var(--brand);
+    color: var(--brand-fg);
+    border-color: var(--brand);
+    @apply font-extrabold;
+  }
+
+  /* Falco's segmented switch: a sunk track, the chosen one raised. */
+  .seg {
+    background: var(--surface-2);
+    @apply flex gap-1 rounded-xl p-1;
+  }
+  .seg > button {
+    color: var(--muted);
+    @apply flex-1 rounded-lg px-2 py-2 text-[12.5px] font-extrabold transition-all duration-200;
+  }
+  .seg > button[aria-pressed='true'] {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgb(32 35 30 / 0.12);
+  }
+
+  /* --- bars ------------------------------------------------------ */
+  .bar {
+    background: var(--surface-2);
+    @apply h-2.5 w-full overflow-hidden rounded-full;
+  }
+  .bar-fill {
+    background: var(--brand);
+    @apply h-full rounded-full transition-all duration-500;
+  }
+  .bar-fill-warn {
+    background: var(--warn);
+  }
+
+  .avatar {
+    background: var(--brand-soft);
+    color: var(--brand-soft-fg);
+    @apply grid shrink-0 place-items-center rounded-full font-extrabold;
+  }
+
+  .skeleton {
+    background: var(--surface-2);
+    @apply animate-pulse rounded-xl;
+  }
 }
 
-/* --- surfaces ---------------------------------------------------- */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  @apply rounded-2xl p-4;
+.no-scrollbar {
+  scrollbar-width: none;
 }
-.card-tight {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  @apply rounded-xl p-3;
-}
-.sunken {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  @apply rounded-xl;
-}
-.divide-row + .divide-row {
-  border-top: 1px solid var(--border);
-}
-
-/* --- form -------------------------------------------------------- */
-.input {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  @apply w-full rounded-xl px-3 py-2.5 text-base outline-none transition;
-}
-.input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--ring);
-}
-.input::placeholder {
-  color: var(--dim);
-}
-.input-lg {
-  @apply rounded-2xl px-4 py-4 text-xl;
-  border-width: 2px;
-}
-.label {
-  color: var(--muted);
-  @apply block text-sm font-medium mb-1;
-}
-
-/* --- buttons ----------------------------------------------------- */
-.btn-primary {
-  background: var(--brand);
-  color: var(--brand-fg);
-  @apply rounded-xl px-4 py-2.5 font-semibold transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100;
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--brand-hover);
-}
-.btn-ghost {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border-strong);
-  @apply rounded-xl px-4 py-2.5 font-medium transition active:scale-[0.98];
-}
-.btn-ghost:hover {
-  background: var(--surface-2);
-}
-.btn-danger {
-  background: var(--bad-soft);
-  color: var(--bad);
-  @apply rounded-xl px-4 py-2.5 font-semibold transition active:scale-[0.98];
-}
-.btn-lg {
-  @apply text-lg py-3.5;
-}
-
-/* --- chips ------------------------------------------------------- */
-.chip {
-  @apply inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap;
-}
-.chip-ok {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-.chip-warn {
-  background: var(--warn-soft);
-  color: var(--warn);
-}
-.chip-bad {
-  background: var(--bad-soft);
-  color: var(--bad);
-}
-.chip-info {
-  background: var(--info-soft);
-  color: var(--info);
-}
-.chip-mute {
-  background: var(--surface-2);
-  color: var(--muted);
-}
-
-/* Filter pills (tap targets, not labels) */
-.pill {
-  background: var(--surface);
-  color: var(--muted);
-  border: 1px solid var(--border-strong);
-  @apply rounded-full px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition;
-}
-.pill-on {
-  background: var(--brand);
-  color: var(--brand-fg);
-  border-color: var(--brand);
-}
-
-/* --- occupancy bar ----------------------------------------------- */
-.bar {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  @apply h-2.5 w-full rounded-full overflow-hidden;
-}
-.bar-fill {
-  background: var(--brand);
-  @apply h-full rounded-full transition-all duration-500;
-}
-.bar-fill-warn {
-  background: var(--warn);
-}
-
-/* --- avatar ------------------------------------------------------ */
-.avatar {
-  background: var(--brand-soft);
-  color: var(--brand-soft-fg);
-  @apply shrink-0 grid place-items-center rounded-full font-bold;
-}
-
-/* --- misc -------------------------------------------------------- */
-.skeleton {
-  background: var(--surface-2);
-  @apply rounded-xl animate-pulse;
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 .safe-b {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 
+/* ------------------------------------------------------------ motion -- */
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes stepIn {
   from {
     opacity: 0;
@@ -246,10 +340,6 @@ body {
     transform: none;
   }
 }
-.step-in {
-  animation: stepIn 0.22s ease-out;
-}
-
 @keyframes popIn {
   from {
     opacity: 0;
@@ -260,16 +350,187 @@ body {
     transform: none;
   }
 }
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes sheet-down {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* `backwards`, never `both`: a transform left applied after an entrance makes
+   the element a containing block and traps every fixed sheet inside it. */
+.screen-in {
+  animation: screen-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.rise {
+  animation: rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.step-in {
+  animation: stepIn 0.22s ease-out backwards;
+}
 .pop-in {
-  animation: popIn 0.18s ease-out;
+  animation: popIn 0.18s ease-out backwards;
+}
+.sheet-up {
+  animation: sheet-up 320ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+.sheet-down {
+  animation: sheet-down 220ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+.fade-in {
+  animation: fade-in 220ms ease-out both;
+}
+.fade-out {
+  animation: fade-out 220ms ease-in both;
+}
+.toast-in {
+  animation: toast-in 260ms cubic-bezier(0.2, 0.9, 0.25, 1) backwards;
+}
+.toast-out {
+  animation: fade-out 280ms ease-in both;
+}
+@media (min-width: 768px) {
+  .sheet-up {
+    animation: dialog-in 240ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  }
+  .sheet-down {
+    animation: dialog-out 170ms ease-in both;
+  }
+}
+
+/* ------------------------------------------------------ the bottom bar --
+   Falco's bar, as he approved it: only paper, ink and blue. The blue orb glides
+   to the tab you tap with a small overshoot and the icon rises into it; a ring
+   of page colour cuts the orb out of the bar. */
+.nav-wrap::before {
+  /* the page fades out just before the bar, rather than stopping on a line */
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: -12px;
+  height: 12px;
+  background: linear-gradient(to top, #ece9dc, rgba(236, 233, 220, 0));
+  pointer-events: none;
+}
+.nav-bar {
+  background: linear-gradient(180deg, #faf8f1 0%, #f3f0e5 100%);
+  border: 1px solid rgba(32, 35, 30, 0.09);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 2px rgba(32, 35, 30, 0.05),
+    0 14px 30px -18px rgba(32, 35, 30, 0.4);
+}
+.nav-orb-track {
+  transition: transform 520ms cubic-bezier(0.34, 1.45, 0.55, 1);
+  will-change: transform;
+}
+.nav-orb {
+  position: absolute;
+  left: 50%;
+  top: -16px;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 46%),
+    linear-gradient(160deg, #3d5df7 0%, #2347ed 58%, #1a36cc 100%);
+  box-shadow:
+    0 0 0 5px #ece9dc,
+    0 10px 18px -8px rgba(35, 71, 237, 0.55),
+    inset 0 -2px 5px rgba(18, 38, 155, 0.35);
+}
+/* The cut's own edge, drawn only where it runs through the bar. */
+.nav-orb::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1px solid rgba(32, 35, 30, 0.09);
+  clip-path: inset(21px 0 0 0);
+}
+.nav-icon {
+  transition:
+    transform 420ms cubic-bezier(0.34, 1.5, 0.55, 1),
+    color 250ms ease;
+}
+.nav-icon.is-on {
+  transform: translateY(-14.5px);
+}
+
+/* A mouse shows what can be clicked before it is clicked. */
+@media (hover: hover) and (pointer: fine) {
+  .press:hover {
+    filter: brightness(0.97);
+  }
+  a.card:hover,
+  button.card:hover {
+    border-color: #8b8e77;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .step-in,
-  .pop-in,
-  .bar-fill {
-    animation: none;
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
 
@@ -284,8 +545,9 @@ body {
 }
 
 @media print {
-  header,
-  nav,
+  /* Only the app's own chrome. This used to hide every <header> on the page —
+     including the statement's letterhead, which is a <header> too, so the
+     printed PDF went out without the company name on it. */
   .no-print {
     display: none !important;
   }
@@ -327,7 +589,7 @@ body {
   --ink: var(--text);
   --rule: var(--border-strong);
   --lh-bar: var(--brand);
-  --lh-mark-bg: #04654a;
+  --lh-mark-bg: #2347ed;
   color: var(--ink);
 }
 
@@ -372,8 +634,8 @@ body {
    company name to nothing on the very page it exists for. */
 .lh-name {
   font-size: 2rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
+  font-weight: 800;
+  letter-spacing: 0.03em;
   line-height: 1.05;
   text-transform: uppercase;
   color: var(--ink);
@@ -381,7 +643,7 @@ body {
 @media (max-width: 520px) {
   .lh-name {
     font-size: 1.4rem;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
   }
   .lh-mark {
     width: 44px;
@@ -438,7 +700,7 @@ body {
 
 .stmt-title {
   font-size: 1.15rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin: 1.25rem 0 0.75rem;
@@ -471,6 +733,7 @@ body {
   font-weight: 800;
   line-height: 1.15;
   margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
 }
 .stmt-hero .net {
   border-color: var(--brand);
@@ -483,7 +746,7 @@ body {
 }
 .stmt-sec h3 {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   padding-bottom: 0.35rem;
@@ -592,13 +855,11 @@ body {
 }
 
 @media print {
-  /* Paper is white and ink is black, whatever the phone's theme was. */
+  /* Paper is white and ink is black, whatever the screen looked like. */
   .stmt {
     --ink: #000000;
     --rule: #000000;
-    /* Not var(--brand): a phone in dark mode would print the brand bar in mint
-       green, which on paper is almost nothing. */
-    --lh-bar: #04654a;
+    --lh-bar: #2347ed;
     font-size: 11pt;
     color: #000000;
   }
@@ -621,6 +882,8 @@ body {
     height: 15mm;
   }
   .lh {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
     box-shadow: 0 5px 0 -1px #000000;
     margin-bottom: 1rem;
   }

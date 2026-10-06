@@ -41,7 +41,7 @@ export default function Logs() {
   return (
     <div className="space-y-4">
       <h1 className="h1">Logs</h1>
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)} className={`pill ${tab === t ? 'pill-on' : ''}`}>
             {t}

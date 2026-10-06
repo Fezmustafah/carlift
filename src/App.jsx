@@ -7,6 +7,7 @@ import Join from './pages/Join'
 import Checkin from './pages/Checkin'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Month from './pages/Month'
 import Members from './pages/Members'
 import Verify from './pages/Verify'
 import Collect from './pages/Collect'
@@ -41,7 +42,12 @@ function SetupNotice() {
 
 function Protected({ session, children }) {
   if (!hasSupabase) return <SetupNotice />
-  if (session === undefined) return <div className="p-10 text-center dim">Loading…</div>
+  if (session === undefined)
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="w-6 h-6 rounded-full border-2 border-soft border-t-blue animate-spin" />
+      </div>
+    )
   if (!session) return <Navigate to="/login" replace />
   return children
 }
@@ -74,7 +80,10 @@ export default function App() {
           </Protected>
         }
       >
-        <Route index path="/" element={<Dashboard />} />
+        {/* The register is the whole book now, so home is the month it adds
+            up to. The members-list dashboard stays, one tap down in More. */}
+        <Route index path="/" element={<Month />} />
+        <Route path="/seats" element={<Dashboard />} />
         <Route path="/members" element={<Members />} />
         <Route path="/verify" element={<Verify />} />
         <Route path="/collect" element={<Collect />} />
